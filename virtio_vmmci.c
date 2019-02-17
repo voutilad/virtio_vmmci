@@ -32,12 +32,6 @@ static unsigned int features[] = {
 
 };
 
-static int __init init(void)
-{
-	printk(KERN_INFO "vmmci init!\n");
-	return 0;
-}
-
 static int vmmci_validate(struct virtio_device *vdev)
 {
 	printk(KERN_INFO "vmmci_validate\n");
@@ -74,7 +68,7 @@ static int vmmci_restore(struct virtio_device *vdev)
 }
 #endif
 
-static struct virtio_driver virtio_vmmci_driver = {
+static struct virtio_driver virtio_vmmci = {
 	.feature_table = features,
 	.feature_table_size = ARRAY_SIZE(features),
 	.driver.name = 	KBUILD_MODNAME,
@@ -90,9 +84,20 @@ static struct virtio_driver virtio_vmmci_driver = {
 #endif
 };
 
+static int __init init(void)
+{
+	int error = register_virtio_driver(&virtio_vmmci);
+	if (error)
+		printk(KERN_ERR "failed to init vmmci: %d\n", error);
+
+	printk(KERN_INFO "vmmci init success!\n");
+	return 0;
+}
+
 static void __exit fini(void)
 {
-	printk(KERN_INFO "vmmci fini!\n");
+	unregister_virtio_driver(&virtio_vmmci);
+	printk(KERN_INFO "vmmci exited!\n");
 }
 
 module_init(init);
