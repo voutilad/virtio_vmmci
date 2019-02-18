@@ -19,4 +19,9 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-#define VIRTIO_ID_VMMCI		65535	/* matches OpenBSD's private id */
+#define VIRTIO_ID_VMMCI			0xffff	/* matches OpenBSD's private id */
+#define PCI_VENDOR_ID_OPENBSD_VMM	0x0b5d
+/* Features */
+#define VMMCI_F_TIMESYNC		(1<<0)
+#define VMMCI_F_ACK			(1<<1)
+#define VMMCI_F_SYNCRTC			(1<<2)

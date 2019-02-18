@@ -20,16 +20,26 @@
  */
 
 #include <linux/module.h>
+#include <linux/pci.h>
 #include <linux/virtio.h>
 #include "virtio_vmmci.h"
 
-static struct virtio_device_id id_table[] = {
+struct virtio_vmmci {
+	struct virtio_device *vdev;
+};
+
+static struct pci_device_id vmmci_pci_id_table[] = {
+	{ PCI_DEVICE(PCI_VENDOR_ID_OPENBSD_VMM, PCI_ANY_ID) },
+	{ 0 },
+};
+
+static struct virtio_device_id vmmci_virtio_id_table[] = {
 	{ VIRTIO_ID_VMMCI, VIRTIO_DEV_ANY_ID },
 	{ 0 },
 };
 
 static unsigned int features[] = {
-
+	VMMCI_F_TIMESYNC, VMMCI_F_ACK, VMMCI_F_SYNCRTC,
 };
 
 static int vmmci_validate(struct virtio_device *vdev)
@@ -40,7 +50,18 @@ static int vmmci_validate(struct virtio_device *vdev)
 
 static int vmmci_probe(struct virtio_device *vdev)
 {
+	struct virtio_vmmci *vmmci;
+	int err;
+
 	printk(KERN_INFO "vmmci_probe\n");
+	vdev->priv = vmmci = kmalloc(sizeof(*vmmci), GFP_KERNEL);
+
+	if (!vmmci) {
+		err = -ENOMEM;
+		printk(KERN_ERR "kmalloc error in vmmci_probe\n");
+		return err;
+	}
+
 	return 0;
 }
 
@@ -68,12 +89,41 @@ static int vmmci_restore(struct virtio_device *vdev)
 }
 #endif
 
-static struct virtio_driver virtio_vmmci = {
+static int vmmci_pci_probe(struct pci_dev *pci_dev, const struct pci_device_id *id)
+{
+	printk(KERN_INFO "vmmci_pci_probe...\n");
+	printk(KERN_INFO "\tvendor: %d, device: %d\n", pci_dev->vendor, pci_dev->device);
+	printk(KERN_INFO "\tsubvendor: %d, subdevice: %d\n", pci_dev->subsystem_vendor, pci_dev->subsystem_device);
+
+	return 0;
+}
+
+static void vmmci_pci_remove(struct pci_dev *pci_dev)
+{
+	printk(KERN_INFO "vmmci_pci_remove!\n");
+}
+
+static int vmmci_pci_sriov_configure(struct pci_dev *pci_dev, int num_vfs)
+{
+	printk(KERN_INFO "vmmci_pci_sriov_configure\n");
+	return 0;
+}
+
+static struct pci_driver vmmci_pci_driver = {
+	.name		= "virtio-vmmci",
+	.id_table	= vmmci_pci_id_table,
+	.probe		= vmmci_pci_probe,
+	.remove		= vmmci_pci_remove,
+	.sriov_configure = vmmci_pci_sriov_configure,
+};
+
+
+static struct virtio_driver vmmci_virtio_driver = {
 	.feature_table = features,
 	.feature_table_size = ARRAY_SIZE(features),
 	.driver.name = 	KBUILD_MODNAME,
 	.driver.owner = THIS_MODULE,
-	.id_table = 	id_table,
+	.id_table = 	vmmci_virtio_id_table,
 	.validate = 	vmmci_validate,
 	.probe = 	vmmci_probe,
 	.remove = 	vmmci_remove,
@@ -84,9 +134,10 @@ static struct virtio_driver virtio_vmmci = {
 #endif
 };
 
+/*
 static int __init init(void)
 {
-	int error = register_virtio_driver(&virtio_vmmci);
+	int error = register_virtio_driver(&vmmci_virtio_driver);
 	if (error)
 		printk(KERN_ERR "failed to init vmmci: %d\n", error);
 
@@ -96,14 +147,13 @@ static int __init init(void)
 
 static void __exit fini(void)
 {
-	unregister_virtio_driver(&virtio_vmmci);
+	unregister_virtio_driver(&vmmci_virtio_driver);
 	printk(KERN_INFO "vmmci exited!\n");
 }
+*/
 
-module_init(init);
-module_exit(fini);
-
-MODULE_DEVICE_TABLE(virtio, id_table);
+module_pci_driver(vmmci_pci_driver);
+MODULE_DEVICE_TABLE(pci, vmmci_pci_id_table);
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Dave Voutila");
 MODULE_DESCRIPTION("OpenBSD VMM Control Interface");
