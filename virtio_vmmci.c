@@ -24,12 +24,14 @@
 #include <linux/virtio.h>
 #include "virtio_vmmci.h"
 
-struct virtio_vmmci {
-	struct virtio_device *vdev;
+// ??? Does this need to be like the OpenBSD vmmci_softc struct?
+struct virtio_vmmci_device {
+	struct virtio_device vdev;
+	struct pci_dev *pci_dev;
 };
 
 static struct pci_device_id vmmci_pci_id_table[] = {
-	{ PCI_DEVICE(PCI_VENDOR_ID_OPENBSD_VMM, PCI_ANY_ID) },
+	{ PCI_DEVICE(PCI_VENDOR_ID_OPENBSD_VMM, PCI_DEVICE_ID_OPENBSD_VMMCI) },
 	{ 0 },
 };
 
@@ -50,10 +52,12 @@ static int vmmci_validate(struct virtio_device *vdev)
 
 static int vmmci_probe(struct virtio_device *vdev)
 {
+	/*
 	struct virtio_vmmci *vmmci;
 	int err;
-
+	*/
 	printk(KERN_INFO "vmmci_probe\n");
+/*
 	vdev->priv = vmmci = kmalloc(sizeof(*vmmci), GFP_KERNEL);
 
 	if (!vmmci) {
@@ -61,7 +65,7 @@ static int vmmci_probe(struct virtio_device *vdev)
 		printk(KERN_ERR "kmalloc error in vmmci_probe\n");
 		return err;
 	}
-
+*/
 	return 0;
 }
 
@@ -91,11 +95,31 @@ static int vmmci_restore(struct virtio_device *vdev)
 
 static int vmmci_pci_probe(struct pci_dev *pci_dev, const struct pci_device_id *id)
 {
+	struct virtio_vmmci_device *vmm_dev = NULL;
+	int rc;
+
 	printk(KERN_INFO "vmmci_pci_probe...\n");
 	printk(KERN_INFO "\tvendor: %d, device: %d\n", pci_dev->vendor, pci_dev->device);
 	printk(KERN_INFO "\tsubvendor: %d, subdevice: %d\n", pci_dev->subsystem_vendor, pci_dev->subsystem_device);
 
-	return 0;
+	vmm_dev = kzalloc(sizeof(struct virtio_vmmci_device), GFP_KERNEL);
+	if (!vmm_dev) {
+		printk(KERN_ERR "could not allocate virtio_vmmci_device!\n");
+		return -ENOMEM;
+	}
+
+	pci_set_drvdata(pci_dev, vmm_dev);
+	vmm_dev->vdev.dev.parent = &pci_dev->dev;
+	vmm_dev->pci_dev = pci_dev;
+
+	rc = pci_enable_device(pci_dev);
+	if (rc) {
+		printk(KERN_ERR "could not enable device\n");
+		pci_disable_device(pci_dev);
+	}
+
+	printk(KERN_INFO "vmmci_pci_probe finished\n");
+	return rc;
 }
 
 static void vmmci_pci_remove(struct pci_dev *pci_dev)
