@@ -23,6 +23,8 @@
 #include <linux/virtio.h>
 #include "virtio_vmmci.h"
 
+
+
 static struct virtio_device_id id_table[] = {
 	{ VIRTIO_ID_VMMCI, VIRTIO_DEV_ANY_ID },
 	{ 0 },
@@ -70,7 +72,7 @@ static int vmmci_restore(struct virtio_device *vdev)
 }
 #endif
 
-static struct virtio_driver virtio_vmmci = {
+static struct virtio_driver virtio_vmmci_driver = {
 	.feature_table = features,
 	.feature_table_size = ARRAY_SIZE(features),
 	.feature_table_legacy = features,
@@ -88,31 +90,7 @@ static struct virtio_driver virtio_vmmci = {
 #endif
 };
 
-static int __init init(void)
-{
-	int error;
-	printk(KERN_INFO "virtio_vmmci initializing...");
-	
-	error = register_virtio_driver(&virtio_vmmci);
-	if (error) {
-		printk(KERN_ERR "failed to init virtio_vmmci: %d\n", error);
-		return error;
-	}
-
-	printk(KERN_INFO "virtio_vmmci initialized successfully!\n");
-	return 0;
-}
-
-static void __exit fini(void)
-{
-	printk(KERN_INFO "virtio_vmmci exiting...");
-	// unregister_virtio_driver(&virtio_vmmci);
-	printk(KERN_INFO "virtio_vmmci exited!\n");
-}
-
-module_init(init);
-module_exit(fini);
-
-MODULE_DEVICE_TABLE(virtio, id_table);
+module_virtio_driver(virtio_vmmci_driver);
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("OpenBSD VMM Control Interface");
+MODULE_AUTHOR("Dave Voutila <voutilad@gmail.com>");
