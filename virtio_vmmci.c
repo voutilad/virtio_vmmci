@@ -29,7 +29,7 @@ static struct virtio_device_id id_table[] = {
 };
 
 static unsigned int features[] = {
-
+	VMMCI_F_TIMESYNC, VMMCI_F_ACK, VMMCI_F_SYNCRTC,
 };
 
 static int vmmci_validate(struct virtio_device *vdev)
@@ -40,7 +40,9 @@ static int vmmci_validate(struct virtio_device *vdev)
 
 static int vmmci_probe(struct virtio_device *vdev)
 {
-	printk(KERN_INFO "vmmci_probe\n");
+	printk(KERN_INFO "vmmci_probe started...\n");
+
+	printk(KERN_INFO "vmmci_probe finished.\n");
 	return 0;
 }
 
@@ -71,6 +73,8 @@ static int vmmci_restore(struct virtio_device *vdev)
 static struct virtio_driver virtio_vmmci = {
 	.feature_table = features,
 	.feature_table_size = ARRAY_SIZE(features),
+	.feature_table_legacy = features,
+	.feature_table_size_legacy = ARRAY_SIZE(features),
 	.driver.name = 	KBUILD_MODNAME,
 	.driver.owner = THIS_MODULE,
 	.id_table = 	id_table,
@@ -86,18 +90,24 @@ static struct virtio_driver virtio_vmmci = {
 
 static int __init init(void)
 {
-	int error = register_virtio_driver(&virtio_vmmci);
-	if (error)
-		printk(KERN_ERR "failed to init vmmci: %d\n", error);
+	int error;
+	printk(KERN_INFO "virtio_vmmci initializing...");
+	
+	error = register_virtio_driver(&virtio_vmmci);
+	if (error) {
+		printk(KERN_ERR "failed to init virtio_vmmci: %d\n", error);
+		return error;
+	}
 
-	printk(KERN_INFO "vmmci init success!\n");
+	printk(KERN_INFO "virtio_vmmci initialized successfully!\n");
 	return 0;
 }
 
 static void __exit fini(void)
 {
-	unregister_virtio_driver(&virtio_vmmci);
-	printk(KERN_INFO "vmmci exited!\n");
+	printk(KERN_INFO "virtio_vmmci exiting...");
+	// unregister_virtio_driver(&virtio_vmmci);
+	printk(KERN_INFO "virtio_vmmci exited!\n");
 }
 
 module_init(init);
@@ -105,6 +115,4 @@ module_exit(fini);
 
 MODULE_DEVICE_TABLE(virtio, id_table);
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Dave Voutila");
 MODULE_DESCRIPTION("OpenBSD VMM Control Interface");
-MODULE_VERSION("6.4");
