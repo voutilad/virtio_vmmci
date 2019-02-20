@@ -24,6 +24,11 @@
 #define PCI_VENDOR_ID_OPENBSD_VMM	0x0b5d
 #define PCI_DEVICE_ID_OPENBSD_VMMCI	0x0777
 
+/* Configuration registers */
+#define VMMCI_CONFIG_COMMAND	0
+#define VMMCI_CONFIG_TIME_SEC	4
+#define VMMCI_CONFIG_TIME_USEC	12
+
 /* Features */
 #define VMMCI_F_TIMESYNC		(1<<0)
 #define VMMCI_F_ACK			(1<<1)
