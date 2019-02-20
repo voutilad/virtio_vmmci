@@ -1,5 +1,15 @@
 # virtio_vmmci
 
+# requirements
+Before you go any further, you'll need my custom [linux
+kernel](https://github.com/voutilad/linux) that contains my hacks on the
+`virtio_pci` drivers.
+
+See this diff:
+[https://patch-diff.githubusercontent.com/raw/voutilad/linux/pull/1.patch] 
+
+# background
+
 Linux guests that run under [vmm(4)](http://man.openbsd.org/vmm) can't properly
 update their clocks when [vmd(8)](http://man.openbsd.org/vmd) tells them to like
 OpenBSD guests.
