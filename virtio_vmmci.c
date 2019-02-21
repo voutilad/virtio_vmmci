@@ -21,9 +21,12 @@
 
 #include <linux/module.h>
 #include <linux/virtio.h>
+#include <linux/virtio_config.h>
 #include "virtio_vmmci.h"
 
-
+struct virtio_vmmci {
+	struct virtio_device *vdev;
+};
 
 static struct virtio_device_id id_table[] = {
 	{ VIRTIO_ID_VMMCI, VIRTIO_DEV_ANY_ID },
@@ -42,7 +45,22 @@ static int vmmci_validate(struct virtio_device *vdev)
 
 static int vmmci_probe(struct virtio_device *vdev)
 {
+	struct virtio_vmmci *vmmci;
 	printk(KERN_INFO "vmmci_probe started...\n");
+
+	vdev->priv = vmmci = kzalloc(sizeof(*vmmci), GFP_KERNEL);
+	if (!vmmci) {
+		printk(KERN_ERR "vmmci_probe: failed to alloc vmmci struct");
+		return -ENOMEM;
+	}
+	vmmci->vdev = vdev;
+
+	if (virtio_has_feature(vdev, VMMCI_F_TIMESYNC))
+		printk(KERN_INFO "...found feature TIMESYNC\n");
+	if (virtio_has_feature(vdev, VMMCI_F_ACK))
+		printk(KERN_INFO "...found feature ACK\n");
+	if (virtio_has_feature(vdev, VMMCI_F_SYNCRTC))
+		printk(KERN_INFO "...found feature SYNCRTC\n");
 
 	printk(KERN_INFO "vmmci_probe finished.\n");
 	return 0;
@@ -50,7 +68,12 @@ static int vmmci_probe(struct virtio_device *vdev)
 
 static void vmmci_remove(struct virtio_device *vdev)
 {
-	printk(KERN_INFO "vmmci_remove\n");
+	struct virtio_vmmci *vmmci = vdev->priv;
+	printk(KERN_INFO "vmmci_remove started...\n");
+
+	kfree(vmmci);
+	printk(KERN_INFO "vmmci_remove finished!\n");
+
 }
 
 static void vmmci_changed(struct virtio_device *vdev)
