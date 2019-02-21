@@ -22,10 +22,12 @@
 #include <linux/module.h>
 #include <linux/virtio.h>
 #include <linux/virtio_config.h>
+#include <linux/time.h>
 #include "virtio_vmmci.h"
 
 struct virtio_vmmci {
 	struct virtio_device *vdev;
+	struct delayed_work clock_work;
 };
 
 static struct virtio_device_id id_table[] = {
@@ -43,9 +45,31 @@ static int vmmci_validate(struct virtio_device *vdev)
 	return 0;
 }
 
+static void clock_work_func(struct work_struct *work)
+{
+	struct virtio_vmmci *vmmci;
+	u64 sec, usec;
+
+	printk(KERN_INFO "clock_work_func starting...\n");
+
+	// my god this container_of stuff seems...messy?
+	vmmci = container_of((struct delayed_work *) work, struct virtio_vmmci, clock_work);
+
+	sec = virtio_cread64(vmmci->vdev, VMMCI_CONFIG_TIME_SEC);
+	usec = virtio_cread64(vmmci->vdev, VMMCI_CONFIG_TIME_USEC);
+
+	printk(KERN_INFO "read host clock: sec=0x%08llx, usec=%lld\n", sec, usec);
+
+	schedule_delayed_work(&vmmci->clock_work, 5 * HZ);
+	printk(KERN_INFO "scheduled next clock work...\n");
+	printk(KERN_INFO "clock_work_func finished!\n");
+}
+
 static int vmmci_probe(struct virtio_device *vdev)
 {
 	struct virtio_vmmci *vmmci;
+	unsigned long delay = 10 / HZ;
+
 	printk(KERN_INFO "vmmci_probe started...\n");
 
 	vdev->priv = vmmci = kzalloc(sizeof(*vmmci), GFP_KERNEL);
@@ -62,6 +86,10 @@ static int vmmci_probe(struct virtio_device *vdev)
 	if (virtio_has_feature(vdev, VMMCI_F_SYNCRTC))
 		printk(KERN_INFO "...found feature SYNCRTC\n");
 
+	printk(KERN_INFO "...scheduling clock work at %lu sec intervals", delay);
+	INIT_DELAYED_WORK(&vmmci->clock_work, clock_work_func);
+	schedule_delayed_work(&vmmci->clock_work, delay);
+
 	printk(KERN_INFO "vmmci_probe finished.\n");
 	return 0;
 }
@@ -71,6 +99,8 @@ static void vmmci_remove(struct virtio_device *vdev)
 	struct virtio_vmmci *vmmci = vdev->priv;
 	printk(KERN_INFO "vmmci_remove started...\n");
 
+	cancel_delayed_work_sync(&vmmci->clock_work);
+
 	kfree(vmmci);
 	printk(KERN_INFO "vmmci_remove finished!\n");
 
@@ -78,7 +108,9 @@ static void vmmci_remove(struct virtio_device *vdev)
 
 static void vmmci_changed(struct virtio_device *vdev)
 {
-	printk(KERN_INFO "vmmci_change\n");
+	printk(KERN_INFO "vmmci_changed...\n");
+
+
 }
 
 #ifdef CONFIG_PM_SLEEP
