@@ -48,15 +48,15 @@ static int vmmci_validate(struct virtio_device *vdev)
 static void clock_work_func(struct work_struct *work)
 {
 	struct virtio_vmmci *vmmci;
-	u64 sec, usec;
+	u64 sec, usec = 0;
 
 	printk(KERN_INFO "clock_work_func starting...\n");
 
 	// my god this container_of stuff seems...messy?
 	vmmci = container_of((struct delayed_work *) work, struct virtio_vmmci, clock_work);
 
-	sec = virtio_cread64(vmmci->vdev, VMMCI_CONFIG_TIME_SEC);
-	usec = virtio_cread64(vmmci->vdev, VMMCI_CONFIG_TIME_USEC);
+	vmmci->vdev->config->get(vmmci->vdev, VMMCI_CONFIG_TIME_SEC, &sec, sizeof(sec));
+	// usec = virtio_cread64(vmmci->vdev, VMMCI_CONFIG_TIME_USEC);
 
 	printk(KERN_INFO "read host clock: sec=0x%08llx, usec=%lld\n", sec, usec);
 
