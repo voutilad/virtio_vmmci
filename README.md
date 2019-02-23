@@ -5,7 +5,7 @@ This is a hacky implementation of [vmmci(4)](https://man.openbsd.org/vmmci) for
 Linux using a customized [linux kernel](https://github.com/voutilad/linux)
 that contains some OpenBSD-specific tweaks to the `virtio_pci` drivers.
 
-See this diff for an overview:
+See this diff for an overview of the underlying kernel hacks:
 https://patch-diff.githubusercontent.com/raw/voutilad/linux/pull/1.patch
 
 ## Installation & Usage
