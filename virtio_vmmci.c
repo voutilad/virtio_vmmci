@@ -57,7 +57,7 @@ static void clock_work_func(struct work_struct *work)
 	struct timespec64 host, guest, diff;
 	u64 sec, usec;
 
-	printk(KERN_INFO "clock_work_func starting...\n");
+	printk(KERN_DEBUG "clock_work_func starting...\n");
 
 	// my god this container_of stuff seems...messy?
 	vmmci = container_of((struct delayed_work *) work, struct virtio_vmmci, clock_work);
@@ -79,9 +79,16 @@ static void clock_work_func(struct work_struct *work)
 	printk(KERN_INFO "current delta: sec=%lld, nsec=%ld\n",
 	    diff.tv_sec, diff.tv_nsec);
 
+	if (diff.tv_sec < -5 || diff.tv_sec > 5) {
+		printk(KERN_INFO "forcing sync of system clock to host\n");
+		if(do_settimeofday64(&host)) {
+			printk(KERN_ERR "error setting system clock to host!\n");
+			// what the heck should we do?!
+		}
+	}
+
 	queue_delayed_work(vmmci->clock_wq, &vmmci->clock_work, DELAY_10s);
-	printk(KERN_INFO "scheduled next clock work...\n");
-	printk(KERN_INFO "clock_work_func finished!\n");
+	printk(KERN_DEBUG "clock_work_func finished!\n");
 }
 
 static int vmmci_probe(struct virtio_device *vdev)
@@ -126,7 +133,7 @@ static void vmmci_remove(struct virtio_device *vdev)
 
 	cancel_delayed_work(&vmmci->clock_work);
 
-	printk(KERN_INFO "flushing work queue and destroying...\n");
+	printk(KERN_INFO "...flushing work queue and destroying it\n");
 	flush_workqueue(vmmci->clock_wq);
 	destroy_workqueue(vmmci->clock_wq);
 
@@ -142,7 +149,9 @@ static void vmmci_remove(struct virtio_device *vdev)
 
 static void vmmci_changed(struct virtio_device *vdev)
 {
-	printk(KERN_INFO "vmmci_changed...\n");
+	printk(KERN_INFO "vmmci_changed started...\n");
+
+	printk(KERN_INFO "vmmci_changed finished!\n");
 }
 
 #ifdef CONFIG_PM_SLEEP
@@ -162,8 +171,6 @@ static int vmmci_restore(struct virtio_device *vdev)
 static struct virtio_driver virtio_vmmci_driver = {
 	.feature_table = features,
 	.feature_table_size = ARRAY_SIZE(features),
-	.feature_table_legacy = features,
-	.feature_table_size_legacy = ARRAY_SIZE(features),
 	.driver.name = 	KBUILD_MODNAME,
 	.driver.owner = THIS_MODULE,
 	.id_table = 	id_table,

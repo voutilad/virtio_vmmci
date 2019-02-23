@@ -29,7 +29,7 @@
 #define VMMCI_CONFIG_TIME_SEC	4
 #define VMMCI_CONFIG_TIME_USEC	12
 
-/* Features */
-#define VMMCI_F_TIMESYNC		(1<<0)
-#define VMMCI_F_ACK			(1<<1)
-#define VMMCI_F_SYNCRTC			(1<<2)
+/* Features...these get bit-shifted in the Linux virtio code */
+#define VMMCI_F_TIMESYNC		0
+#define VMMCI_F_ACK			1
+#define VMMCI_F_SYNCRTC			2
