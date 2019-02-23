@@ -121,8 +121,8 @@ For instance, on Ubuntu 18.04, `lspci -v` shows (abbreviated):
         I/O ports at 5000 [size=4K]
 ```
 Where the SCSI controller looks like a Red Hat device because the OpenBSD host
-uses their "donated" (as they say) identifiers. However, the `vmmci(4)` device
-(the `00:05.0` one) uses `0b5d:0777` (`b5d == 'bsd'`...ha).
+uses Red Hat's "donated" (as they say) identifiers. However, the `vmmci(4)`
+device (the `00:05.0` one) uses `0b5d:0777` (`b5d == 'bsd'`...ha).
 
 We can either re-implement all the `virtio_pci` code in our vmmci driver, or do
 what I did in the interim and hack the kernel's `virtio_pci` driver.
@@ -164,6 +164,9 @@ via the "modern" approach if it's a config read from our vmmci driver.
 
 4. The `virtio_balloon.c` driver in the Linux kernel tree is a relatively
    simple virtio example to understand Linux virtio drivers.
+
+# Footnotes
+(GitHub might not render theses...but believe me they're here:)
 
 [1]: https://github.com/openbsd/src/blob/master/usr.sbin/vmd/mc146818.
 [2]: https://elixir.bootlin.com/linux/v4.20.12/source/kernel/time/timekeeping.c#L1222
