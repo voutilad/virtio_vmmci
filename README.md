@@ -88,9 +88,10 @@ As of _23 Feb 2019_, `virtio_vmmci` will:
 Currently, it doesn't _yet_:
 
 - listen for rtc sync control messages from the OpenBSD host
-- listen for ANY control messages from the OpenBSD host :-)
+- listen for ANY control messages from the OpenBSD host :-) (still figuring
+  out how to do this)
 - work standalone without the kernel modifications (need to bundle a full
-  hacked version of the virtio pci code)
+  hacked version of the virtio pci code, but doable)
 
 Also, if you haven't figured it out, it currently relies on a hacked version of
 the Linux [virtio_pci_legacy.c][3] code
@@ -166,7 +167,7 @@ via the "modern" approach if it's a config read from our vmmci driver.
    simple virtio example to understand Linux virtio drivers.
 
 # Footnotes
-(GitHub might not render theses...but believe me they're here:)
+(GitHub might not render these...but believe me they're here :-) )
 
 [1]: https://github.com/openbsd/src/blob/master/usr.sbin/vmd/mc146818.
 [2]: https://elixir.bootlin.com/linux/v4.20.12/source/kernel/time/timekeeping.c#L1222
