@@ -22,11 +22,17 @@
 #include <linux/module.h>
 #include <linux/virtio.h>
 #include <linux/virtio_config.h>
-#include <linux/time.h>
+#include <linux/timekeeping.h>
+#include <linux/time64.h>
 #include "virtio_vmmci.h"
+
+static const char *QNAME = "vmmci-wq";
+static const int DELAY_10s = HZ * 5;
+static const int DELAY_1s = HZ / HZ;
 
 struct virtio_vmmci {
 	struct virtio_device *vdev;
+	struct workqueue_struct *clock_wq;
 	struct delayed_work clock_work;
 };
 
@@ -48,7 +54,8 @@ static int vmmci_validate(struct virtio_device *vdev)
 static void clock_work_func(struct work_struct *work)
 {
 	struct virtio_vmmci *vmmci;
-	u64 sec, usec = 0;
+	struct timespec64 host, guest, diff;
+	u64 sec, usec;
 
 	printk(KERN_INFO "clock_work_func starting...\n");
 
@@ -56,11 +63,23 @@ static void clock_work_func(struct work_struct *work)
 	vmmci = container_of((struct delayed_work *) work, struct virtio_vmmci, clock_work);
 
 	vmmci->vdev->config->get(vmmci->vdev, VMMCI_CONFIG_TIME_SEC, &sec, sizeof(sec));
-	// usec = virtio_cread64(vmmci->vdev, VMMCI_CONFIG_TIME_USEC);
+	vmmci->vdev->config->get(vmmci->vdev, VMMCI_CONFIG_TIME_USEC, &usec, sizeof(usec));
+	getnstimeofday64(&guest);
 
-	printk(KERN_INFO "read host clock: sec=0x%08llx, usec=%lld\n", sec, usec);
+	printk(KERN_INFO "read host clock: sec=%lld, nsec=%ld\n",
+	    sec, (long) usec * NSEC_PER_USEC);
+	printk(KERN_INFO "read guest clock: sec=%lld, nsec=%ld\n",
+	    guest.tv_sec, guest.tv_nsec);
 
-	schedule_delayed_work(&vmmci->clock_work, 5 * HZ);
+	host.tv_sec = sec;
+	host.tv_nsec = usec * NSEC_PER_USEC;
+
+	diff = timespec64_sub(host, guest);
+
+	printk(KERN_INFO "current delta: sec=%lld, nsec=%ld\n",
+	    diff.tv_sec, diff.tv_nsec);
+
+	queue_delayed_work(vmmci->clock_wq, &vmmci->clock_work, DELAY_10s);
 	printk(KERN_INFO "scheduled next clock work...\n");
 	printk(KERN_INFO "clock_work_func finished!\n");
 }
@@ -68,13 +87,12 @@ static void clock_work_func(struct work_struct *work)
 static int vmmci_probe(struct virtio_device *vdev)
 {
 	struct virtio_vmmci *vmmci;
-	unsigned long delay = 10 / HZ;
 
 	printk(KERN_INFO "vmmci_probe started...\n");
 
 	vdev->priv = vmmci = kzalloc(sizeof(*vmmci), GFP_KERNEL);
 	if (!vmmci) {
-		printk(KERN_ERR "vmmci_probe: failed to alloc vmmci struct");
+		printk(KERN_ERR "vmmci_probe: failed to alloc vmmci struct\n");
 		return -ENOMEM;
 	}
 	vmmci->vdev = vdev;
@@ -86,9 +104,14 @@ static int vmmci_probe(struct virtio_device *vdev)
 	if (virtio_has_feature(vdev, VMMCI_F_SYNCRTC))
 		printk(KERN_INFO "...found feature SYNCRTC\n");
 
-	printk(KERN_INFO "...scheduling clock work at %lu sec intervals", delay);
+	vmmci->clock_wq = create_singlethread_workqueue(QNAME);
+	if (vmmci->clock_wq == NULL) {
+		printk(KERN_ERR "vmmci_probe: failed to alloc workqueue\n");
+		return -ENOMEM;
+	}
+
 	INIT_DELAYED_WORK(&vmmci->clock_work, clock_work_func);
-	schedule_delayed_work(&vmmci->clock_work, delay);
+	queue_delayed_work(vmmci->clock_wq, &vmmci->clock_work, DELAY_1s);
 
 	printk(KERN_INFO "vmmci_probe finished.\n");
 	return 0;
@@ -99,18 +122,16 @@ static void vmmci_remove(struct virtio_device *vdev)
 	struct virtio_vmmci *vmmci = vdev->priv;
 	printk(KERN_INFO "vmmci_remove started...\n");
 
-	cancel_delayed_work_sync(&vmmci->clock_work);
-
+	flush_workqueue(vmmci->clock_wq);
+	destroy_workqueue(vmmci->clock_wq);
 	kfree(vmmci);
-	printk(KERN_INFO "vmmci_remove finished!\n");
 
+	printk(KERN_INFO "vmmci_remove finished!\n");
 }
 
 static void vmmci_changed(struct virtio_device *vdev)
 {
 	printk(KERN_INFO "vmmci_changed...\n");
-
-
 }
 
 #ifdef CONFIG_PM_SLEEP
