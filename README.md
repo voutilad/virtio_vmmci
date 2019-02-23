@@ -50,7 +50,7 @@ resume the host and you should (shortly) see the guest sync its clock:
 [15670.027879] virtio_vmmci: [clock_work_func] clock synchronization routine finished
 ```
 
-If you check `date` or `datetimectl` you should see a system time that is close
+If you check `date` or `timedatectl` you should see a system time that is close
 to your OpenBSD host time.
 
 ## But...why? Why did you do this?
