@@ -122,8 +122,19 @@ static void vmmci_remove(struct virtio_device *vdev)
 	struct virtio_vmmci *vmmci = vdev->priv;
 	printk(KERN_INFO "vmmci_remove started...\n");
 
+	printk(KERN_INFO "...cancelling work\n");
+
+	cancel_delayed_work(&vmmci->clock_work);
+
+	printk(KERN_INFO "flushing work queue and destroying...\n");
 	flush_workqueue(vmmci->clock_wq);
 	destroy_workqueue(vmmci->clock_wq);
+
+	printk(KERN_INFO "...resetting device\n");
+	vdev->config->reset(vdev);
+        //vdev->config->del_vqs(vb->vdev);
+
+	printk(KERN_INFO "...kfreeing\n");
 	kfree(vmmci);
 
 	printk(KERN_INFO "vmmci_remove finished!\n");
