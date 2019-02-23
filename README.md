@@ -39,7 +39,7 @@ If it doesn't immediately blow up in your face, you should be able to check
 ```
 
 > Too noisey? You can turn down the log level by setting `debug = 0` in the
-> driver code and recompiline.
+> driver code and recompiling.
 
 If you want to test the driver, suspend your OpenBSD host. Wait awhile and
 resume the host and you should (shortly) see the guest sync its clock:
