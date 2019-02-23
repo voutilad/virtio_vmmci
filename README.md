@@ -9,8 +9,10 @@ See this diff for an overview of the underlying kernel hacks:
 https://patch-diff.githubusercontent.com/raw/voutilad/linux/pull/1.patch
 
 ## Installation & Usage
-First, get yourself a GNU/Linux distro running under OpenBSD. See the FAQ for
-guidance: https://www.openbsd.org/faq/faq16.html
+First, get yourself a GNU/Linux distro running under OpenBSD. (This has been
+tested and developed using Ubuntu 18.04.) See the FAQ for guidance: 
+
+https://www.openbsd.org/faq/faq16.html
 
 Ready? Good.
 
