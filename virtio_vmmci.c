@@ -26,7 +26,16 @@
 #include <linux/time64.h>
 #include "virtio_vmmci.h"
 
+
+int debug = 1;
+
+#define debug(fmt, ...) \
+	do { if (debug) pr_info("virtio_vmmci: [%s] " fmt, __func__, ##__VA_ARGS__); \
+	} while (0)
+#define log(fmt, ...) pr_info("virtio_vmmci: " fmt, ##__VA_ARGS__)
+
 static const char *QNAME = "vmmci-wq";
+static const s64 MAX_DRIFT_SEC = 5;
 static const int DELAY_10s = HZ * 5;
 static const int DELAY_1s = HZ / HZ;
 
@@ -47,7 +56,7 @@ static unsigned int features[] = {
 
 static int vmmci_validate(struct virtio_device *vdev)
 {
-	printk(KERN_INFO "vmmci_validate\n");
+	debug("not implemented");
 	return 0;
 }
 
@@ -57,45 +66,44 @@ static void clock_work_func(struct work_struct *work)
 	struct timespec64 host, guest, diff;
 	u64 sec, usec;
 
-	printk(KERN_DEBUG "clock_work_func starting...\n");
+	debug("starting clock synchronization\n");
 
-	// my god this container_of stuff seems...messy?
+	// My god this container_of stuff seems...messy? Oh, Linux...
 	vmmci = container_of((struct delayed_work *) work, struct virtio_vmmci, clock_work);
 
 	vmmci->vdev->config->get(vmmci->vdev, VMMCI_CONFIG_TIME_SEC, &sec, sizeof(sec));
 	vmmci->vdev->config->get(vmmci->vdev, VMMCI_CONFIG_TIME_USEC, &usec, sizeof(usec));
 	getnstimeofday64(&guest);
 
-	printk(KERN_INFO "read host clock: sec=%lld, nsec=%ld\n",
-	    sec, (long) usec * NSEC_PER_USEC);
-	printk(KERN_INFO "read guest clock: sec=%lld, nsec=%ld\n",
-	    guest.tv_sec, guest.tv_nsec);
+	debug("guest clock: %lld.%ld, host clock: %lld.%ld",
+	    sec, (long) usec * NSEC_PER_USEC, guest.tv_sec, (long) guest.tv_nsec);
 
 	host.tv_sec = sec;
 	host.tv_nsec = usec * NSEC_PER_USEC;
 
 	diff = timespec64_sub(host, guest);
 
-	printk(KERN_INFO "current delta: sec=%lld, nsec=%ld\n",
-	    diff.tv_sec, diff.tv_nsec);
+	debug("current time delta: %lld.%ld\n", diff.tv_sec, diff.tv_nsec);
 
-	if (diff.tv_sec < -5 || diff.tv_sec > 5) {
-		printk(KERN_INFO "forcing sync of system clock to host\n");
+	if (diff.tv_sec < -MAX_DRIFT_SEC || diff.tv_sec > MAX_DRIFT_SEC) {
+		log("detected drift greater than %lld seconds, synchronizing clock\n",
+		    MAX_DRIFT_SEC);
 		if(do_settimeofday64(&host)) {
 			printk(KERN_ERR "error setting system clock to host!\n");
-			// what the heck should we do?!
+			// XXX: not sure how we'd reach here other than `diff`
+			// being malformed
 		}
 	}
 
 	queue_delayed_work(vmmci->clock_wq, &vmmci->clock_work, DELAY_10s);
-	printk(KERN_DEBUG "clock_work_func finished!\n");
+	debug("clock synchronization routine finished\n");
 }
 
 static int vmmci_probe(struct virtio_device *vdev)
 {
 	struct virtio_vmmci *vmmci;
 
-	printk(KERN_INFO "vmmci_probe started...\n");
+	debug("initializing vmmci device\n");
 
 	vdev->priv = vmmci = kzalloc(sizeof(*vmmci), GFP_KERNEL);
 	if (!vmmci) {
@@ -104,12 +112,12 @@ static int vmmci_probe(struct virtio_device *vdev)
 	}
 	vmmci->vdev = vdev;
 
-	if (virtio_has_feature(vdev, VMMCI_F_TIMESYNC))
-		printk(KERN_INFO "...found feature TIMESYNC\n");
-	if (virtio_has_feature(vdev, VMMCI_F_ACK))
-		printk(KERN_INFO "...found feature ACK\n");
-	if (virtio_has_feature(vdev, VMMCI_F_SYNCRTC))
-		printk(KERN_INFO "...found feature SYNCRTC\n");
+	if (debug && virtio_has_feature(vdev, VMMCI_F_TIMESYNC))
+		debug("...found feature TIMESYNC\n");
+	if (debug && virtio_has_feature(vdev, VMMCI_F_ACK))
+		debug("...found feature ACK\n");
+	if (debug && virtio_has_feature(vdev, VMMCI_F_SYNCRTC))
+		debug("...found feature SYNCRTC\n");
 
 	vmmci->clock_wq = create_singlethread_workqueue(QNAME);
 	if (vmmci->clock_wq == NULL) {
@@ -120,50 +128,43 @@ static int vmmci_probe(struct virtio_device *vdev)
 	INIT_DELAYED_WORK(&vmmci->clock_work, clock_work_func);
 	queue_delayed_work(vmmci->clock_wq, &vmmci->clock_work, DELAY_1s);
 
-	printk(KERN_INFO "vmmci_probe finished.\n");
+	log("started VMM Control Interface driver\n");
 	return 0;
 }
 
 static void vmmci_remove(struct virtio_device *vdev)
 {
 	struct virtio_vmmci *vmmci = vdev->priv;
-	printk(KERN_INFO "vmmci_remove started...\n");
-
-	printk(KERN_INFO "...cancelling work\n");
+	debug("removing device\n");
 
 	cancel_delayed_work(&vmmci->clock_work);
-
-	printk(KERN_INFO "...flushing work queue and destroying it\n");
 	flush_workqueue(vmmci->clock_wq);
 	destroy_workqueue(vmmci->clock_wq);
+	debug("cancelled, flushed, and destroyed work queues\n");
 
-	printk(KERN_INFO "...resetting device\n");
 	vdev->config->reset(vdev);
-        //vdev->config->del_vqs(vb->vdev);
+        debug("reset device\n");
 
-	printk(KERN_INFO "...kfreeing\n");
 	kfree(vmmci);
 
-	printk(KERN_INFO "vmmci_remove finished!\n");
+	log("removed device\n");
 }
 
 static void vmmci_changed(struct virtio_device *vdev)
 {
-	printk(KERN_INFO "vmmci_changed started...\n");
-
-	printk(KERN_INFO "vmmci_changed finished!\n");
+	debug("not implemented\n");
 }
 
 #ifdef CONFIG_PM_SLEEP
 static int vmmci_freeze(struct virtio_device *vdev)
 {
-	printk(KERN_INFO "vmmci_freeze\n");
+	debug("not implemented\n");
 	return 0;
 }
 
 static int vmmci_restore(struct virtio_device *vdev)
 {
-	printk(KERN_INFO "vmmci_restore\n");
+	debug("not implemented\n");
 	return 0;
 }
 #endif

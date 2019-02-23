@@ -8,7 +8,7 @@ all:
 clean:
 	 make -C /lib/modules/$(shell uname -r)/build M=$(PWD) clean
 
-insmod:
+insmod:	all
 	sudo insmod ./virtio_vmmci.ko
 
 rmmod:
