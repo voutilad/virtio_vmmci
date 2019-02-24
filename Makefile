@@ -1,4 +1,5 @@
-obj-m += virtio_vmmci.o
+obj-m += virtio_vmmci.o virtio_obsd_pci.o
+virtio_obsd_pci-y := virtio_pci_common.o virtio_pci_obsd.o
 
 .PHONY: insmod rmmod
 
@@ -13,4 +14,3 @@ insmod:	all
 
 rmmod:
 	sudo rmmod virtio_vmmci.ko
-
