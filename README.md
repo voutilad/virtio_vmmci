@@ -23,7 +23,7 @@ manager or whatever you normally use to install stuff. For
 Ubuntu/Debian-like systems, you can try the following:
 
 ```sh
-$ sudo apt install build-essential linux-headers-$(uname -r)
+$ sudo apt install build-essential libelf-dev linux-headers-$(uname -r)
 ```
 
 ### 2. Compiling
