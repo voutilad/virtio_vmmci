@@ -130,6 +130,19 @@ allow OpenBSD users that suspend/hibernate to have Linux guests that don't
 suffer from clocks getting out of sync if they don't halt the guests before
 suspending the host.
 
+## Isn't just using settimeofday(2) dangerous?
+Maybe? Probably? This isn't a userland `settimeofday(2)` call so it
+might be slightly different. I honestly don't know.
+
+Looking at how VirtualBox handles this with their userland guest
+additions services, they look for large clock drifts where "large"
+is currently > 30 minutes. If it's large, it just uses
+`settimeofday(2)`. Otherwise, it tries to use something like
+`adjtimex(2)` to accelerate the clock up to the correct time.
+
+See their source for `VBoxServiceTimeSync.cpp`:
+https://www.virtualbox.org/browser/vbox/trunk/src/VBox/Additions/common/VBoxService/VBoxServiceTimeSync.cpp?rev=76553#L683
+
 
 # Current State & Known Caveats
 As of _24 Feb 2019_, `virtio_vmmci` will:
