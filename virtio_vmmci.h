@@ -43,5 +43,5 @@
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4,18,0)
 #define TIME_FMT "%ld.%ld"
 #else
-#define TIME_FMT "%lld.%lld"
+#define TIME_FMT "%lld.%ld"
 #endif
