@@ -2,30 +2,78 @@
 _...or "How I learned to shut my x270 laptop and not worry about my VMs."_
 
 This is a hacky implementation of [vmmci(4)](https://man.openbsd.org/vmmci) for
-Linux using a customized [linux kernel](https://github.com/voutilad/linux)
-that contains some OpenBSD-specific tweaks to the `virtio_pci` drivers.
+Linux using a customized version of the `virtio_pci` driver from the
+mainline kernel. It comes in two parts:
 
-See this diff for an overview of the underlying kernel hacks:
-https://patch-diff.githubusercontent.com/raw/voutilad/linux/pull/1.patch
+1. `virtio_pci_obsd.ko` -- handles the quirks of OpenBSD's PCI
+   implementation of `vmmci(4)`
+2. `virtio_vmmci.ko` -- virtio device driver that does the clock
+   syncing similar to `vmmci(4)`
+
+You need both modules!
 
 ## Installation & Usage
-First, get yourself a GNU/Linux distro running under OpenBSD. (This has been
-tested and developed using Ubuntu 18.04.) See the FAQ for guidance: 
+This version is a bit easier as it doesn't require my custom kernel
+(still available at https://github.com/voutilad/linux) and should work
+with a recent (4.x) kernel shipped by your distro.
 
-https://www.openbsd.org/faq/faq16.html
+### 1. Prerequisites
+Install the tools required to build kernel modules using your package
+manager or whatever you normally use to install stuff. For
+Ubuntu/Debian-like systems, you can try the following:
 
-Ready? Good.
+```sh
+$ sudo apt install build-essential linux-headers-$(uname -r)
+```
 
-1. Grab either the linked patch set or just clone my 4.20 kernel fork from
-   https://github.com/voutilad/linux
-2. Build and install the kernel...make sure to use my tuned kernel config so it
-   doesn't take 2+ hours to build. (On my Lenovo x270, it's ~45 minutes even
-   while `vmm(4)` only supports a single vcpu.
-3. Build the `virtio_vmmci` module, simply issuing: `make`
-4. Load the module via `insmod ./virtio_vmmci.ko`
+### 2. Compiling
+This should be easy:
 
-If it doesn't immediately blow up in your face, you should be able to check
-`dmesg(1)` and see something like:
+```sh
+$ make
+```
+
+If that worked and you see _no warnings_, you should have both a
+`virtio_pci_obsd.ko` file and a `virtio_vmmci.ko` file.
+
+### 3. Loading
+You can either use `make insmod` or manually load the modules:
+
+```sh
+$ sudo insmod virtio_pci_obsd.ko
+$ sudo insmod virtio_vmmci.ko
+```
+
+## Verifying things are Working
+
+After you load `virtio_pci_obsd.ko` you should see your system match
+and enable the vmmci PCI device. Check `dmesg(1)` and you should see
+something like:
+
+```
+[  825.819945] virtio_pci_obsd: loading out-of-tree module taints kernel.
+[  825.819945] virtio_pci_obsd: module verification failed: signature and/or required key missing - tainting kernel
+[  825.819945] virtio-pci-obsd 0000:00:05.0: runtime IRQ mapping not provided by arch
+[  825.819945] virtio_pci_obsd_match: matching 0x0777
+[  825.819945] virtio_pci_obsd_match: found OpenBSD device
+[  825.819945] virtio-pci-obsd 0000:00:05.0: enabling bus mastering
+```
+
+If you check with `lspci(8)` in verbose mode (`lspci -v`) you should
+see the device and the fact it's using our `virti_pci_obsd` driver:
+
+```
+00:05.0 Communication controller: Device 0b5d:0777
+        Subsystem: Device 0b5d:ffff
+        Flags: bus master, fast devsel, latency 0, IRQ 9
+        I/O ports at 5000 [size=4K]
+        Kernel driver in use: virtio-pci-obsd
+```
+
+When you load `virtio_vmmci.ko`, you should see a confirmation the
+module is loaded and, if setting `debug = 1` in `virtio_vmmci.c`
+you'll get some other messages as well in the `dmesg(1)` output:
+
 
 ```
 [17769.012388] virtio_vmmci: [vmmci_validate] not implemented
@@ -43,8 +91,11 @@ If it doesn't immediately blow up in your face, you should be able to check
 > Too noisey? You can turn down the log level by setting `debug = 0` in the
 > driver code and recompiling.
 
-If you want to test the driver, suspend your OpenBSD host. Wait awhile and
-resume the host and you should (shortly) see the guest sync its clock:
+If you want to test the driver, suspend your OpenBSD host by
+triggering `zzz` manually or by something like closing your laptop
+lid. Wait at least 10 seconds or so and resume your OpenBSD system. In
+the Linux guest, your `dmesg(1)` output will tell you (in less than 30
+seconds) that it's detected a clock drift and it's sync'ing the clock:
 
 ```
 [15670.027879] virtio_vmmci: [clock_work_func] current time delta: 91.482370612
@@ -52,8 +103,8 @@ resume the host and you should (shortly) see the guest sync its clock:
 [15670.027879] virtio_vmmci: [clock_work_func] clock synchronization routine finished
 ```
 
-If you check `date` or `timedatectl` you should see a system time that is close
-to your OpenBSD host time.
+If you check `date` or `timedatectl` on the Linux guest you should see
+the system time is very close to our host time.
 
 ## But...why? Why did you do this?
 I <3 OpenBSD and occasionally have to run GNU/Linux for _$work_ reasons. While
@@ -79,8 +130,22 @@ allow OpenBSD users that suspend/hibernate to have Linux guests that don't
 suffer from clocks getting out of sync if they don't halt the guests before
 suspending the host.
 
+## Isn't just using settimeofday(2) dangerous?
+Maybe? Probably? This isn't a userland `settimeofday(2)` call so it
+might be slightly different. I honestly don't know.
+
+Looking at how VirtualBox handles this with their userland guest
+additions services, they look for large clock drifts where "large"
+is currently > 30 minutes. If it's large, it just uses
+`settimeofday(2)`. Otherwise, it tries to use something like
+`adjtimex(2)` to accelerate the clock up to the correct time.
+
+See their source for `VBoxServiceTimeSync.cpp`:
+https://www.virtualbox.org/browser/vbox/trunk/src/VBox/Additions/common/VBoxService/VBoxServiceTimeSync.cpp?rev=76553#L683
+
+
 # Current State & Known Caveats
-As of _23 Feb 2019_, `virtio_vmmci` will:
+As of _24 Feb 2019_, `virtio_vmmci` will:
 
 - register as a virtio device when loading the module (`virtio_vmmci.ko`)
 - regularly read the OpenBSD host clock via the virtio config registers...
@@ -92,11 +157,7 @@ Currently, it doesn't _yet_:
 - listen for rtc sync control messages from the OpenBSD host
 - listen for ANY control messages from the OpenBSD host :-) (still figuring
   out how to do this)
-- work standalone without the kernel modifications (need to bundle a full
-  hacked version of the virtio pci code, but doable)
 
-Also, if you haven't figured it out, it currently relies on a hacked version of
-the Linux [virtio_pci_legacy.c][3] code
 
 # Learnings from VirtIO hacking...
 Here are some notes of things I've learned along the way. Maybe someone will
@@ -150,8 +211,8 @@ registers 4 bytes apart).
 The problem is Linux's legacy virtio pci implementation instead tries to read
 1 byte from the register address, then continues down the line of registers
 until it has read enough data. This causes garbage data to be read a legacy pci
-Linux virtio driver. Hence, I had to hack[3] the Linux virtio pci code to read
-via the "modern" approach if it's a config read from our vmmci driver.
+Linux virtio driver. Hence the `virtio_pci_obsd` customizations other
+than just matching PCI ids.
 
 # Acknowledgements
 1. Thanks to the OpenBSD `vmm(4)`/`vmd(8)` hackers...especially those that put

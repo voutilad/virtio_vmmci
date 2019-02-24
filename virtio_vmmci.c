@@ -63,7 +63,7 @@ static void clock_work_func(struct work_struct *work)
 {
 	struct virtio_vmmci *vmmci;
 	struct timespec64 host, guest, diff;
-	u64 sec, usec;
+	s64 sec, usec; // should these be signed or unsigned?
 
 	debug("starting clock synchronization\n");
 
@@ -74,19 +74,24 @@ static void clock_work_func(struct work_struct *work)
 	vmmci->vdev->config->get(vmmci->vdev, VMMCI_CONFIG_TIME_USEC, &usec, sizeof(usec));
 	getnstimeofday64(&guest);
 
-	debug("guest clock: %lld.%ld, host clock: %lld.%ld",
-	    sec, (long) usec * NSEC_PER_USEC, guest.tv_sec, (long) guest.tv_nsec);
+	debug("host clock: %lld.%lld, guest clock: " TIME_FMT,
+	    sec, usec * NSEC_PER_USEC, guest.tv_sec, guest.tv_nsec);
 
 	host.tv_sec = sec;
-	host.tv_nsec = usec * NSEC_PER_USEC;
+	host.tv_nsec = (long) usec * NSEC_PER_USEC;
 
 	diff = timespec64_sub(host, guest);
 
-	debug("current time delta: %lld.%ld\n", diff.tv_sec, diff.tv_nsec);
+	debug("current time delta: " TIME_FMT "\n", diff.tv_sec, diff.tv_nsec);
 
 	if (diff.tv_sec < -MAX_DRIFT_SEC || diff.tv_sec > MAX_DRIFT_SEC) {
 		log("detected drift greater than %lld seconds, synchronizing clock\n",
 		    MAX_DRIFT_SEC);
+		// XXX: while this can be dangerous to throw the clock forward
+		//      or backwards, even VirtualBox will just jump the clock
+		//	if the drift is > 30m. See:
+		//	https://www.virtualbox.org/browser/vbox/trunk/src/VBox/Additions/common/VBoxService/VBoxServiceTimeSync.cpp?rev=76553#L683
+
 		if(do_settimeofday64(&host)) {
 			printk(KERN_ERR "error setting system clock to host!\n");
 			// XXX: not sure how we'd reach here other than `diff`

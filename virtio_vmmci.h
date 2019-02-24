@@ -18,10 +18,11 @@
  *  along with this program; if not, write to the Free Software
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
+#include <linux/version.h>
 
 #define VIRTIO_ID_VMMCI			0xffff	/* matches OpenBSD's private id */
 
-#define PCI_VENDOR_ID_OPENBSD_VMM	0x0b5d
+#define PCI_VENDOR_ID_OPENBSD		0x0b5d
 #define PCI_DEVICE_ID_OPENBSD_VMMCI	0x0777
 
 /* Configuration registers */
@@ -33,3 +34,14 @@
 #define VMMCI_F_TIMESYNC		0
 #define VMMCI_F_ACK			1
 #define VMMCI_F_SYNCRTC			2
+
+/*
+ * Linux is in a 32/64 bit transition phases where v4.17 and below
+ * seem to define timespec64 as just timespec...ugh. Also, this is
+ * probably a really bad idea to handle it this way?
+ */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,18,0)
+#define TIME_FMT "%ld.%ld"
+#else
+#define TIME_FMT "%lld.%ld"
+#endif
