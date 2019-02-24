@@ -87,6 +87,11 @@ static void clock_work_func(struct work_struct *work)
 	if (diff.tv_sec < -MAX_DRIFT_SEC || diff.tv_sec > MAX_DRIFT_SEC) {
 		log("detected drift greater than %lld seconds, synchronizing clock\n",
 		    MAX_DRIFT_SEC);
+		// XXX: while this can be dangerous to throw the clock forward
+		//      or backwards, even VirtualBox will just jump the clock
+		//	if the drift is > 30m. See:
+		//	https://www.virtualbox.org/browser/vbox/trunk/src/VBox/Additions/common/VBoxService/VBoxServiceTimeSync.cpp?rev=76553#L683
+
 		if(do_settimeofday64(&host)) {
 			printk(KERN_ERR "error setting system clock to host!\n");
 			// XXX: not sure how we'd reach here other than `diff`
