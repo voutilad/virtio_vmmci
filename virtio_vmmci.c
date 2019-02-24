@@ -26,8 +26,7 @@
 #include <linux/time64.h>
 #include "virtio_vmmci.h"
 
-
-int debug = 1;
+u8 debug = 0;
 
 #define debug(fmt, ...) \
 	do { if (debug) pr_info("virtio_vmmci: [%s] " fmt, __func__, ##__VA_ARGS__); \
