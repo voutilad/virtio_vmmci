@@ -24,6 +24,7 @@
 #include <linux/pci.h>
 #include <linux/slab.h>
 #include <linux/interrupt.h>
+#include <linux/version.h>
 #include <linux/virtio.h>
 #include <linux/virtio_config.h>
 #include <linux/virtio_ring.h>
@@ -141,11 +142,19 @@ const char *vp_bus_name(struct virtio_device *vdev);
  * - OR over all affinities for shared MSI
  * - ignore the affinity request if we're using INTX
  */
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,19,0)
+int vp_set_vq_affinity(struct virtqueue *vq, int cpu);
+#else
 int vp_set_vq_affinity(struct virtqueue *vq, const struct cpumask *cpu_mask);
+#endif
 
 const struct cpumask *vp_get_vq_affinity(struct virtio_device *vdev, int index);
 
 int virtio_pci_obsd_probe(struct virtio_pci_device *);
 void virtio_pci_obsd_remove(struct virtio_pci_device *);
+
+// not sure yet which Linux version introduced this...
+#define VIRTIO_F_SR_IOV			37
 
 #endif

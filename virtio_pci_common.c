@@ -25,6 +25,7 @@
  */
 
 #include "virtio_pci_common.h"
+#include "virtio_vmmci.h"
 
 /* wait for pending irq handlers */
 void vp_synchronize_vectors(struct virtio_device *vdev)
@@ -415,6 +416,37 @@ const char *vp_bus_name(struct virtio_device *vdev)
 	return pci_name(vp_dev->pci_dev);
 }
 
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(4,18,20)
+/* Setup the affinity for a virtqueue:
+ * - force the affinity for per vq vector
+ * - OR over all affinities for shared MSI
+ * - ignore the affinity request if we're using INTX
+ */
+int vp_set_vq_affinity(struct virtqueue *vq, int cpu)
+{
+	struct virtio_device *vdev = vq->vdev;
+	struct virtio_pci_device *vp_dev = to_vp_device(vdev);
+	struct virtio_pci_vq_info *info = vp_dev->vqs[vq->index];
+	struct cpumask *mask;
+	unsigned int irq;
+
+	if (!vq->callback)
+		return -EINVAL;
+
+	if (vp_dev->msix_enabled) {
+		mask = vp_dev->msix_affinity_masks[info->msix_vector];
+		irq = pci_irq_vector(vp_dev->pci_dev, info->msix_vector);
+		if (cpu == -1)
+			irq_set_affinity_hint(irq, NULL);
+		else {
+			cpumask_clear(mask);
+			cpumask_set_cpu(cpu, mask);
+			irq_set_affinity_hint(irq, mask);
+		}
+	}
+	return 0;
+}
+#else
 /* Setup the affinity for a virtqueue:
  * - force the affinity for per vq vector
  * - OR over all affinities for shared MSI
@@ -443,6 +475,7 @@ int vp_set_vq_affinity(struct virtqueue *vq, const struct cpumask *cpu_mask)
 	}
 	return 0;
 }
+#endif
 
 const struct cpumask *vp_get_vq_affinity(struct virtio_device *vdev, int index)
 {
@@ -492,7 +525,7 @@ static const struct dev_pm_ops virtio_pci_pm_ops = {
 
 /* Qumranet donated their vendor ID for devices 0x1000 thru 0x10FF. */
 static const struct pci_device_id virtio_pci_id_table[] = {
-	{ PCI_DEVICE(PCI_VENDOR_ID_OPENBSD, PCI_DEVICE_ID_OPENBSD_CONTROL) },
+	{ PCI_DEVICE(PCI_VENDOR_ID_OPENBSD, PCI_DEVICE_ID_OPENBSD_VMMCI) },
 	{ 0 }
 };
 
