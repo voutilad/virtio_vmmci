@@ -54,6 +54,8 @@ static irqreturn_t vp_config_changed(int irq, void *opaque)
 {
 	struct virtio_pci_device *vp_dev = opaque;
 
+	printk(KERN_INFO "vp_config_changed: %02x\n", irq);
+
 	virtio_config_changed(&vp_dev->vdev);
 	return IRQ_HANDLED;
 }
@@ -84,22 +86,28 @@ static irqreturn_t vp_vring_interrupt(int irq, void *opaque)
  * interrupt. */
 static irqreturn_t vp_interrupt(int irq, void *opaque)
 {
-	struct virtio_pci_device *vp_dev = opaque;
-	u8 isr;
+//	struct virtio_pci_device *vp_dev = opaque;
+//	u8 isr;
+
+	printk(KERN_INFO "virtio_pci_common: vp_interrupt (%d)\n", irq);
 
 	/* reading the ISR has the effect of also clearing it so it's very
 	 * important to save off the value. */
-	isr = ioread8(vp_dev->isr);
+
+	// short circuit for now:
+	// isr = ioread8(vp_dev->isr);
 
 	/* It's definitely not us if the ISR was not high */
-	if (!isr)
+/*	if (!isr)
 		return IRQ_NONE;
-
+*/
 	/* Configuration change?  Tell driver if it wants to know. */
-	if (isr & VIRTIO_PCI_ISR_CONFIG)
+/*	if (isr & VIRTIO_PCI_ISR_CONFIG)
 		vp_config_changed(irq, opaque);
-
-	return vp_vring_interrupt(irq, opaque);
+*/
+	vp_config_changed(irq, opaque);
+	return 0;
+	// return vp_vring_interrupt(irq, opaque);
 }
 
 static int vp_request_msix_vectors(struct virtio_device *vdev, int nvectors,
@@ -571,6 +579,14 @@ static int virtio_pci_probe(struct pci_dev *pci_dev,
 
 
 	pci_set_master(pci_dev);
+
+	printk(KERN_INFO "requesting IRQ: irq=%02x\n", pci_dev->irq);
+	if(request_irq(pci_dev->irq, vp_interrupt, IRQF_SHARED,
+		dev_name(&vp_dev->vdev.dev), vp_dev)) {
+		printk(KERN_INFO "request irq failed?\n");
+	} else {
+		printk(KERN_INFO"request irq OK!\n");
+	}
 
 	rc = register_virtio_device(&vp_dev->vdev);
 	reg_dev = vp_dev;

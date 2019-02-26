@@ -20,10 +20,12 @@
  */
 
 #include <linux/module.h>
+#include <linux/reboot.h>
+#include <linux/time64.h>
+#include <linux/timekeeping.h>
 #include <linux/virtio.h>
 #include <linux/virtio_config.h>
-#include <linux/timekeeping.h>
-#include <linux/time64.h>
+
 #include "virtio_vmmci.h"
 
 u8 debug = 0;
@@ -37,6 +39,13 @@ static const char *QNAME = "vmmci-wq";
 static const s64 MAX_DRIFT_SEC = 5;
 static const int DELAY_10s = HZ * 5;
 static const int DELAY_1s = HZ / HZ;
+
+enum vmmci_cmd {
+	VMMCI_NONE = 0,
+	VMMCI_SHUTDOWN,
+	VMMCI_REBOOT,
+	VMMCI_SYNCRTC,
+};
 
 struct virtio_vmmci {
 	struct virtio_device *vdev;
@@ -116,11 +125,11 @@ static int vmmci_probe(struct virtio_device *vdev)
 	}
 	vmmci->vdev = vdev;
 
-	if (debug && virtio_has_feature(vdev, VMMCI_F_TIMESYNC))
+	if (virtio_has_feature(vdev, VMMCI_F_TIMESYNC))
 		debug("...found feature TIMESYNC\n");
-	if (debug && virtio_has_feature(vdev, VMMCI_F_ACK))
+	if (virtio_has_feature(vdev, VMMCI_F_ACK))
 		debug("...found feature ACK\n");
-	if (debug && virtio_has_feature(vdev, VMMCI_F_SYNCRTC))
+	if (virtio_has_feature(vdev, VMMCI_F_SYNCRTC))
 		debug("...found feature SYNCRTC\n");
 
 	vmmci->clock_wq = create_singlethread_workqueue(QNAME);
@@ -156,7 +165,38 @@ static void vmmci_remove(struct virtio_device *vdev)
 
 static void vmmci_changed(struct virtio_device *vdev)
 {
-	debug("not implemented\n");
+	s32 cmd = 0;
+	log("reading command register...\n");
+
+	vdev->config->get(vdev, VMMCI_CONFIG_COMMAND, &cmd, sizeof(cmd));
+
+	switch (cmd) {
+	case VMMCI_NONE:
+		log("...VMMCI_NONE!\n");
+		break;
+
+	case VMMCI_SHUTDOWN:
+		log("...VMMCI_SHUTDOWN!\n");
+		break;
+
+	case VMMCI_REBOOT:
+		log("...VMMCI_REBOOT!\n");
+		break;
+
+	case VMMCI_SYNCRTC:
+		log("...VMCCI_SYNCRTC!\n");
+		break;
+
+	default:
+		log("...invalid command: %d\n", cmd);
+		break;
+	}
+
+	if (cmd != VMMCI_NONE
+	    && (vdev->features & VMMCI_F_ACK)) {
+		vdev->config->set(vdev, VMMCI_CONFIG_COMMAND, &cmd, sizeof(cmd));
+		log("...acknowledged command %d\n", cmd);
+	}
 }
 
 #ifdef CONFIG_PM_SLEEP
