@@ -43,7 +43,7 @@ static int vp_finalize_features(struct virtio_device *vdev)
 	struct virtio_pci_device *vp_dev = to_vp_device(vdev);
 
 	/* Give virtio_ring a chance to accept features. */
-	vring_transport_features(vdev);
+	// vring_transport_features(vdev);
 
 	/* Make sure we don't have any features > 32 bits! */
 	BUG_ON((u32)vdev->features != vdev->features);
@@ -131,8 +131,6 @@ static void vp_reset(struct virtio_device *vdev)
 	/* Flush out the status write, and flush in device writes,
 	 * including MSi-X interrupts, if any. */
 	ioread8(vp_dev->ioaddr + VIRTIO_PCI_STATUS);
-	/* Flush pending VQ/configuration callbacks. */
-	vp_synchronize_vectors(vdev);
 }
 
 static u16 vp_config_vector(struct virtio_pci_device *vp_dev, u16 vector)
@@ -152,79 +150,13 @@ static struct virtqueue *setup_vq(struct virtio_pci_device *vp_dev,
 				  bool ctx,
 				  u16 msix_vec)
 {
-	struct virtqueue *vq;
-	u16 num;
-	int err;
-	u64 q_pfn;
-
-	/* Select the queue we're interested in */
-	iowrite16(index, vp_dev->ioaddr + VIRTIO_PCI_QUEUE_SEL);
-
-	/* Check if queue is either not available or already active. */
-	num = ioread16(vp_dev->ioaddr + VIRTIO_PCI_QUEUE_NUM);
-	if (!num || ioread32(vp_dev->ioaddr + VIRTIO_PCI_QUEUE_PFN))
-		return ERR_PTR(-ENOENT);
-
-	info->msix_vector = msix_vec;
-
-	/* create the vring */
-	vq = vring_create_virtqueue(index, num,
-				    VIRTIO_PCI_VRING_ALIGN, &vp_dev->vdev,
-				    true, false, ctx,
-				    vp_notify, callback, name);
-	if (!vq)
-		return ERR_PTR(-ENOMEM);
-
-	q_pfn = virtqueue_get_desc_addr(vq) >> VIRTIO_PCI_QUEUE_ADDR_SHIFT;
-	if (q_pfn >> 32) {
-		dev_err(&vp_dev->pci_dev->dev,
-			"platform bug: obsd virtio-mmio must not be used with RAM above 0x%llxGB\n",
-			0x1ULL << (32 + PAGE_SHIFT - 30));
-		err = -E2BIG;
-		goto out_del_vq;
-	}
-
-	/* activate the queue */
-	iowrite32(q_pfn, vp_dev->ioaddr + VIRTIO_PCI_QUEUE_PFN);
-
-	vq->priv = (void __force *)vp_dev->ioaddr + VIRTIO_PCI_QUEUE_NOTIFY;
-
-	if (msix_vec != VIRTIO_MSI_NO_VECTOR) {
-		iowrite16(msix_vec, vp_dev->ioaddr + VIRTIO_MSI_QUEUE_VECTOR);
-		msix_vec = ioread16(vp_dev->ioaddr + VIRTIO_MSI_QUEUE_VECTOR);
-		if (msix_vec == VIRTIO_MSI_NO_VECTOR) {
-			err = -EBUSY;
-			goto out_deactivate;
-		}
-	}
-
-	return vq;
-
-out_deactivate:
-	iowrite32(0, vp_dev->ioaddr + VIRTIO_PCI_QUEUE_PFN);
-out_del_vq:
-	vring_del_virtqueue(vq);
-	return ERR_PTR(err);
+	// XXX: not needed
+	return ERR_PTR(-ENOENT);
 }
 
 static void del_vq(struct virtio_pci_vq_info *info)
 {
-	struct virtqueue *vq = info->vq;
-	struct virtio_pci_device *vp_dev = to_vp_device(vq->vdev);
-
-	iowrite16(vq->index, vp_dev->ioaddr + VIRTIO_PCI_QUEUE_SEL);
-
-	if (vp_dev->msix_enabled) {
-		iowrite16(VIRTIO_MSI_NO_VECTOR,
-			  vp_dev->ioaddr + VIRTIO_MSI_QUEUE_VECTOR);
-		/* Flush the write out to device */
-		ioread8(vp_dev->ioaddr + VIRTIO_PCI_ISR);
-	}
-
-	/* Select and deactivate the queue */
-	iowrite32(0, vp_dev->ioaddr + VIRTIO_PCI_QUEUE_PFN);
-
-	vring_del_virtqueue(vq);
+	// XXX: we don't use virt queues
 }
 
 static const struct virtio_config_ops virtio_pci_config_ops = {
