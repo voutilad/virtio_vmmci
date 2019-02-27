@@ -93,19 +93,43 @@ static void vp_get(struct virtio_device *vdev, unsigned offset,
 	}
 }
 
-/* the config->set() implementation.  it's symmetric to the config->get()
- * implementation */
+/* Similar to vp_get, we need ot use the logic from Linux's virtio_pci_modern
+   to make sure we write to the device properly
+ */
 static void vp_set(struct virtio_device *vdev, unsigned offset,
 		   const void *buf, unsigned len)
 {
 	struct virtio_pci_device *vp_dev = to_vp_device(vdev);
-	void __iomem *ioaddr = vp_dev->ioaddr +
-				VIRTIO_PCI_CONFIG(vp_dev) + offset;
-	const u8 *ptr = buf;
-	int i;
+	void __iomem *config_addr = vp_dev->ioaddr +
+		VIRTIO_PCI_CONFIG_OFF(vp_dev->msix_enabled);
+	u8 b;
+	__le16 w;
+	__le32 l;
 
-	for (i = 0; i < len; i++)
-		iowrite8(ptr[i], ioaddr + i);
+	// BUG_ON(offset + len > vp_dev->device_len);
+
+	switch (len) {
+	case 1:
+		memcpy(&b, buf, sizeof b);
+		iowrite8(b, config_addr + offset);
+		break;
+	case 2:
+		memcpy(&w, buf, sizeof w);
+		iowrite16(le16_to_cpu(w), config_addr + offset);
+		break;
+	case 4:
+		memcpy(&l, buf, sizeof l);
+		iowrite32(le32_to_cpu(l), config_addr + offset);
+		break;
+	case 8:
+		memcpy(&l, buf, sizeof l);
+		iowrite32(le32_to_cpu(l), config_addr + offset);
+		memcpy(&l, buf + sizeof l, sizeof l);
+		iowrite32(le32_to_cpu(l), config_addr + offset + sizeof l);
+		break;
+	default:
+		BUG();
+	}
 }
 
 /* config->{get,set}_status() implementations */
@@ -209,6 +233,9 @@ int virtio_pci_obsd_probe(struct virtio_pci_device *vp_dev)
 	}
 
 	rc = dma_set_mask(&pci_dev->dev, DMA_BIT_MASK(64));
+
+	// XXX: I think we can cut this stuff out since vmd(8) only
+	// 	supports 64-bit guests
 	if (rc) {
 		rc = dma_set_mask_and_coherent(&pci_dev->dev, DMA_BIT_MASK(32));
 	} else {
