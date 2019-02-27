@@ -1,21 +1,38 @@
 # A VMM Control Interface (vmmci) for Linux
 _...or "How I learned to shut my x270 laptop and not worry about my VMs."_
 
-This is a hacky implementation of [vmmci(4)](https://man.openbsd.org/vmmci) for
+This is an implementation of [vmmci(4)](https://man.openbsd.org/vmmci) for
 Linux using a customized version of the `virtio_pci` driver from the
-mainline kernel. It comes in two parts:
+mainline kernel. It currently supports the following:
 
-1. `virtio_pci_obsd.ko` -- handles the quirks of OpenBSD's PCI
-   implementation of `vmmci(4)`
-2. `virtio_vmmci.ko` -- virtio device driver that does the clock
-   syncing similar to `vmmci(4)`
+1. **Clean Shutdowns** when requested by `vmctl(8)`...you can safely use
+   `vmctl stop <you linux guest>` and it'll nicely stop services and
+   sync disks!
+2. **System Time Synchronization** when the guest clock drifts from
+   the host, letting you run Linux guests on your OpenBSD laptop,
+   close the lid, and comfortably resume work much later knowing
+   something else will set the time :-)
 
-You need both modules!
+> Next in the work queue is handling the RTC-setting events so the
+> module can respond to RTC sync events fired via the emulated
+> mc146818 clock.
+
+The Linux VMMCI comes in two parts:
+
+1. `virtio_pci_obsd.ko` -- handles the quirks of getting Linux's
+   virtio pci framework to properly work with the VMM Control
+   Interface device from `vmd(8)`
+2. `virtio_vmmci.ko` -- virtio device driver that replicates the
+   behavior of OpenBSD's `vmmci(4)` driver
+
+_You need both modules installed!_
 
 ## Installation & Usage
-This version is a bit easier as it doesn't require my custom kernel
-(still available at https://github.com/voutilad/linux) and should work
-with a recent (4.x) kernel shipped by your distro.
+Assuming you've got a recent Linux distro running as a guest already
+under OpenBSD, it shouldn't be more than a few minutes to get things
+up and running. However, keep in mind my testing has been mostly on
+_Ubuntu 18.04_ with it's stock 4.15.0 Linux kernel as well as my own
+[4.20.12](https://github.com/voutilad/linux) customized kernel.
 
 ### 1. Prerequisites
 Install the tools required to build kernel modules using your package
@@ -36,7 +53,7 @@ $ make
 If that worked and you see _no warnings_, you should have both a
 `virtio_pci_obsd.ko` file and a `virtio_vmmci.ko` file.
 
-### 3. Loading
+### 3. Loading the Modules
 You can either use `make insmod` or manually load the modules:
 
 ```sh
@@ -44,8 +61,7 @@ $ sudo insmod virtio_pci_obsd.ko
 $ sudo insmod virtio_vmmci.ko
 ```
 
-## Verifying things are Working
-
+### 4. Checking it's Loaded
 After you load `virtio_pci_obsd.ko` you should see your system match
 and enable the vmmci PCI device. Check `dmesg(1)` and you should see
 something like:
@@ -88,14 +104,15 @@ you'll get some other messages as well in the `dmesg(1)` output:
 [17769.034870] virtio_vmmci: [clock_work_func] clock synchronization routine finished
 ```
 
-> Too noisey? You can turn down the log level by setting `debug = 0` in the
-> driver code and recompiling.
+### 5. Testing that it Works
 
-If you want to test the driver, suspend your OpenBSD host by
-triggering `zzz` manually or by something like closing your laptop
-lid. Wait at least 10 seconds or so and resume your OpenBSD system. In
-the Linux guest, your `dmesg(1)` output will tell you (in less than 30
-seconds) that it's detected a clock drift and it's sync'ing the clock:
+#### Testing Clock Sync
+You can easily test the clock synchronization by suspending your
+OpenBSD host by triggering `zzz` manually or by something like closing
+your laptop lid. Wait at least 10 seconds or so and resume your
+OpenBSD system. In the Linux guest, your `dmesg(1)` output will tell
+you (in less than 30 seconds) that it's detected a clock drift and
+it's sync'ing the clock:
 
 ```
 [15670.027879] virtio_vmmci: [clock_work_func] current time delta: 91.482370612
@@ -106,31 +123,28 @@ seconds) that it's detected a clock drift and it's sync'ing the clock:
 If you check `date` or `timedatectl` on the Linux guest you should see
 the system time is very close to our host time.
 
-## But...why? Why did you do this?
-I <3 OpenBSD and occasionally have to run GNU/Linux for _$work_ reasons. While
-it generally just works (with some caveats around clocksource and usually a
-kernel version <= 4.15), what doesn't work yet is being able to suspend my
-laptop and have the Linux guests' clocks resync after an extended period of
-time.
+#### Testing Clean Shutdown
+How can we test a clean shutdown? It's not too hard, but it might not
+work the dame between distros and versions. Here's what I've done on
+Ubuntu 18.04.
 
-## ...Huh? What?
-Linux guests that run under [vmm(4)](http://man.openbsd.org/vmm) can't properly
-update their clocks when [vmd(8)](http://man.openbsd.org/vmd) tells them to like
-OpenBSD guests.
+Assuming your vm is up and running:
 
-From what I can tell, this is because currently the RTC is a partial
-implementation of [mc146818][1] and also relies on a custom virtio device called
-[vmmci(4)](http://man.openbsd.org/vmmci) that runs on OpenBSD guests and listens
-for events from the host that tells it to sync it's clock (when the host detects
-clock drift due to things like a host suspend/hibernation).
+1. Use `tmux(1)` or another means of getting 2 terminal sessions going
+   at once.
+2. In one session, `vmctl console <vm name or id>` to connect to the
+   VM over the serial console. (This obviously assumes your guest is
+   configured to work that way.)
+3. In another session, issue `vmctl stop <vm name or id>`.
+4. Back in the serial console session, you should see your init
+   system...probably `systemd`...start running through the shutdown
+   process.
 
-The goal is to implement a Linux kernel module that can register a virtio device
-that will listen for the clock sync events from the OpenBSD host. This should
-allow OpenBSD users that suspend/hibernate to have Linux guests that don't
-suffer from clocks getting out of sync if they don't halt the guests before
-suspending the host.
 
-## Isn't just using settimeofday(2) dangerous?
+# Seldomly Asked Questions
+Some questions people...mainly myself...have had...
+
+## _Isn't just using settimeofday(2) dangerous?_
 Maybe? Probably? This isn't a userland `settimeofday(2)` call so it
 might be slightly different. I honestly don't know.
 
@@ -140,79 +154,45 @@ is currently > 30 minutes. If it's large, it just uses
 `settimeofday(2)`. Otherwise, it tries to use something like
 `adjtimex(2)` to accelerate the clock up to the correct time.
 
-See their source for `VBoxServiceTimeSync.cpp`:
-https://www.virtualbox.org/browser/vbox/trunk/src/VBox/Additions/common/VBoxService/VBoxServiceTimeSync.cpp?rev=76553#L683
+See their source for `VBoxServiceTimeSync.cpp` [1].
 
+## _Can't you just use OpenNTPD?_
+Not really for large clock drifts like when you suspend your laptop
+for an evening. I've never seen an NTP daemon that is cool with just
+jumping the system time ahead like that.
+
+Yes, `ntpd(8)` supports a `-s` flag to do an actual set of the time
+and not just an adjustment, but even as the man page says it's for
+startup. (Useful for embedded, clock-less systems like a Raspberry Pi.)
+
+## Why all the nasty Virtio PCI glue code?
+Few reasons, but for more background see my email to
+_misc@openbsd.org:_ https://marc.info/?t=155102953000002
+
+In short:
+
+1. OpenBSD purposely uses self-asigned PCI and Virtio device
+   identifiers to "hide" the VMM Control Interface device
+2. Linux's virtio pci code is a LOT more complex and is trying to
+   handle a variety of virtio devices...but can't handle a particular
+   quirk with how the VMM Control Interface deals with config register i/o.
 
 # Current State & Known Caveats
-As of _24 Feb 2019_, `virtio_vmmci` will:
+As of _26 Feb 2019_, `virtio_vmmci` will:
 
-- register as a virtio device when loading the module (`virtio_vmmci.ko`)
-- regularly read the OpenBSD host clock via the virtio config registers...
+1. register as a virtio device when loading the module (`virtio_vmmci.ko`)
+2. regularly read the OpenBSD host clock via the virtio config registers...
   a) compare the guest clock looking for a drift of `5 seconds` or more
   b) if too much drift, set the guest's system clock via `do_settimeofday64`[2]
+3. listen for shutdown/reboot command requests from the OpenBSD host,
+  acknowledge them, and use the Linux kernel's built-in routines for
+  initiating shutdowns/reboots via userland, allowing `pid 1` to "do
+  the right thing."
 
 Currently, it doesn't _yet_:
+* listen for RTC sync control messages from the OpenBSD host and
+  adjust the mc146818 device.
 
-- listen for rtc sync control messages from the OpenBSD host
-- listen for ANY control messages from the OpenBSD host :-) (still figuring
-  out how to do this)
-
-
-# Learnings from VirtIO hacking...
-Here are some notes of things I've learned along the way. Maybe someone will
-find this interesting?
-
-## Making Linux assign VMMCI to the virtio-pci driver
-OpenBSD "hides" some devices from non-OpenBSD guests by using non-standard PCI
-vendor, device, and subsystem identifiers that fall outside established virtio
-ranges that Linux explicitly uses to sanity check before "attaching" to a
-device.
-
-For instance, on Ubuntu 18.04, `lspci -v` shows (abbreviated):
-
-```
-...
-00:04.0 SCSI storage controller: Red Hat, Inc. Virtio SCSI
-        Subsystem: Device 0b5d:0008
-        Flags: bus master, fast devsel, latency 0, IRQ 7
-        I/O ports at 4000 [size=4K]
-        Kernel driver in use: virtio-pci
-
-00:05.0 Communication controller: Device 0b5d:0777
-        Subsystem: Device 0b5d:ffff
-        Flags: bus master, fast devsel, latency 0, IRQ 9
-        I/O ports at 5000 [size=4K]
-```
-Where the SCSI controller looks like a Red Hat device because the OpenBSD host
-uses Red Hat's "donated" (as they say) identifiers. However, the `vmmci(4)`
-device (the `00:05.0` one) uses `0b5d:0777` (`b5d == 'bsd'`...ha).
-
-We can either re-implement all the `virtio_pci` code in our vmmci driver, or do
-what I did in the interim and hack the kernel's `virtio_pci` driver.
-
-## Reading the Host clock
-OpenBSD gets a little cheeky and uses virtio configuration registers as a way
-to transfer the host clock details to the guest. Since the config space is
-mapped via the virtio pci driver, the vmmci virtio driver just needs to read
-the right config registers to get the host to return the clock.
-
-__IF IT WERE SO EASY!__
-
-Apparently there are differing versions of virtio, and the OpenBSD devices show
-up as "legacy" devices. I honestly don't know the differences yet, but the main
-difference here is how Linux will try to read the config registers.
-
-OpenBSD currently assumes a non-legacy (?) approach where (forgive my lack of
-knowledge here) a single read is attempted against a register that then returns
-up to 32-bits of data (a 64-bit read is done via 2 reads of 32 bits at 2
-registers 4 bytes apart).
-
-The problem is Linux's legacy virtio pci implementation instead tries to read
-1 byte from the register address, then continues down the line of registers
-until it has read enough data. This causes garbage data to be read a legacy pci
-Linux virtio driver. Hence the `virtio_pci_obsd` customizations other
-than just matching PCI ids.
 
 # Acknowledgements
 1. Thanks to the OpenBSD `vmm(4)`/`vmd(8)` hackers...especially those that put
@@ -232,6 +212,5 @@ than just matching PCI ids.
 # Footnotes
 (GitHub might not render these...but believe me they're here :-) )
 
-[1]: https://github.com/openbsd/src/blob/master/usr.sbin/vmd/mc146818.
-[2]: https://elixir.bootlin.com/linux/v4.20.12/source/kernel/time/timekeeping.c#L1222
-[3]: https://github.com/voutilad/linux/blob/v4.20-obsd/drivers/virtio/virtio_pci_legacy.c#L49-L91
+[1] https://www.virtualbox.org/browser/vbox/trunk/src/VBox/Additions/common/VBoxService/VBoxServiceTimeSync.cpp?rev=76553#L683
+[2] https://elixir.bootlin.com/linux/v4.20.12/source/kernel/time/timekeeping.c#L1222
