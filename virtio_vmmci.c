@@ -166,36 +166,38 @@ static void vmmci_remove(struct virtio_device *vdev)
 static void vmmci_changed(struct virtio_device *vdev)
 {
 	s32 cmd = 0;
-	log("reading command register...\n");
+	debug("reading command register...\n");
 
 	vdev->config->get(vdev, VMMCI_CONFIG_COMMAND, &cmd, sizeof(cmd));
 
 	switch (cmd) {
 	case VMMCI_NONE:
-		log("...VMMCI_NONE!\n");
+		debug("VMMCI_NONE received\n");
 		break;
 
 	case VMMCI_SHUTDOWN:
-		log("...VMMCI_SHUTDOWN!\n");
+		log("shutdown requested by host!\n");
+		orderly_poweroff(false);
 		break;
 
 	case VMMCI_REBOOT:
-		log("...VMMCI_REBOOT!\n");
+		log("reboot requested by host!\n");
+		orderly_reboot();
 		break;
 
 	case VMMCI_SYNCRTC:
-		log("...VMCCI_SYNCRTC!\n");
+		debug("...VMCCI_SYNCRTC!\n");
 		break;
 
 	default:
-		log("...invalid command: %d\n", cmd);
+		printk(KERN_ERR "invalid command received: 0x%04x\n", cmd);
 		break;
 	}
 
 	if (cmd != VMMCI_NONE
 	    && (vdev->features & VMMCI_F_ACK)) {
 		vdev->config->set(vdev, VMMCI_CONFIG_COMMAND, &cmd, sizeof(cmd));
-		log("...acknowledged command %d\n", cmd);
+		debug("...acknowledged command %d\n", cmd);
 	}
 }
 
