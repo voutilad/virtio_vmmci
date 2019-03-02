@@ -136,7 +136,7 @@ void vp_del_vqs(struct virtio_device *vdev);
 int vp_find_vqs(struct virtio_device *vdev, unsigned nvqs,
     struct virtqueue *vqs[], vq_callback_t *callbacks[],
     const char * const names[]);
-#elif LINUX_VERSION_CODE >= KERNEL_VERSION(4,11,0) && LINUX_KERNEL_VERSION < KERNEL_VERSION(4,12,0)
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(4,11,0) && LINUX_VERSION_CODE < KERNEL_VERSION(4,12,0)
 int vp_find_vqs(struct virtio_device *, unsigned nvqs,
     struct virtqueue *vqs[], vq_callback_t *callbacks[],
     const char * const names[], struct irq_affinity *desc);
