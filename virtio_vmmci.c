@@ -62,11 +62,13 @@ static unsigned int features[] = {
 	VMMCI_F_TIMESYNC, VMMCI_F_ACK, VMMCI_F_SYNCRTC,
 };
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,10,0)
 static int vmmci_validate(struct virtio_device *vdev)
 {
 	debug("not implemented");
 	return 0;
 }
+#endif
 
 static void clock_work_func(struct work_struct *work)
 {
@@ -221,7 +223,9 @@ static struct virtio_driver virtio_vmmci_driver = {
 	.driver.name = 	KBUILD_MODNAME,
 	.driver.owner = THIS_MODULE,
 	.id_table = 	id_table,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,10,0)
 	.validate = 	vmmci_validate,
+#endif
 	.probe = 	vmmci_probe,
 	.remove = 	vmmci_remove,
 	.config_changed = vmmci_changed,

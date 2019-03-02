@@ -130,11 +130,23 @@ void vp_synchronize_vectors(struct virtio_device *vdev);
 bool vp_notify(struct virtqueue *vq);
 /* the config->del_vqs() implementation */
 void vp_del_vqs(struct virtio_device *vdev);
+
 /* the config->find_vqs() implementation */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,11,0)
 int vp_find_vqs(struct virtio_device *vdev, unsigned nvqs,
-		struct virtqueue *vqs[], vq_callback_t *callbacks[],
-		const char * const names[], const bool *ctx,
-		struct irq_affinity *desc);
+    struct virtqueue *vqs[], vq_callback_t *callbacks[],
+    const char * const names[]);
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(4,11,0) && LINUX_KERNEL_VERSION < KERNEL_VERSION(4,12,0)
+int vp_find_vqs(struct virtio_device *, unsigned nvqs,
+    struct virtqueue *vqs[], vq_callback_t *callbacks[],
+    const char * const names[], struct irq_affinity *desc);
+#else
+int vp_find_vqs(struct virtio_device *, unsigned nvqs,
+    struct virtqueue *vqs[], vq_callback_t *callbacks[],
+    const char * const names[], const bool *ctx,
+    struct irq_affinity *desc);
+#endif
+
 const char *vp_bus_name(struct virtio_device *vdev);
 
 /* Setup the affinity for a virtqueue:
@@ -149,7 +161,9 @@ int vp_set_vq_affinity(struct virtqueue *vq, int cpu);
 int vp_set_vq_affinity(struct virtqueue *vq, const struct cpumask *cpu_mask);
 #endif
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,13,0)
 const struct cpumask *vp_get_vq_affinity(struct virtio_device *vdev, int index);
+#endif
 
 int virtio_pci_obsd_probe(struct virtio_pci_device *);
 void virtio_pci_obsd_remove(struct virtio_pci_device *);

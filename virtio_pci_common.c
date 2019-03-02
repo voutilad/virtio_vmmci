@@ -58,7 +58,21 @@ void vp_del_vqs(struct virtio_device *vdev)
 	// XXX: we don't use queues!
 }
 
-
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,11,0)
+int vp_find_vqs(struct virtio_device *vdev, unsigned nvqs,
+    struct virtqueue *vqs[], vq_callback_t *callbacks[],
+    const char * const names[])
+{
+	return 0;
+}
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(4,11,0) && LINUX_VERSION_CODE < KERNEL_VERSION(4,12,0)
+int vp_find_vqs(struct virtio_device *, unsigned nvqs,
+    struct virtqueue *vqs[], vq_callback_t *callbacks[],
+    const char * const names[], struct irq_affinity *desc)
+{
+	return 0;
+}
+#else
 /* the config->find_vqs() implementation */
 int vp_find_vqs(struct virtio_device *vdev, unsigned nvqs,
 		struct virtqueue *vqs[], vq_callback_t *callbacks[],
@@ -68,7 +82,7 @@ int vp_find_vqs(struct virtio_device *vdev, unsigned nvqs,
 	// XXX: we don't use queues!
 	return 0;
 }
-
+#endif
 const char *vp_bus_name(struct virtio_device *vdev)
 {
 	struct virtio_pci_device *vp_dev = to_vp_device(vdev);
@@ -246,6 +260,25 @@ static int virtio_pci_sriov_configure(struct pci_dev *pci_dev, int num_vfs)
 	// XXX: not needed?
 	return 0;
 }
+
+#ifdef CONFIG_PM_SLEEP
+static int virtio_pci_freeze(struct device *dev)
+{
+	// XXX: vmm(4) does not support power management
+	return 0;
+}
+
+static int virtio_pci_restore(struct device *dev)
+{
+	// XXX: vmm(4) does not support power management
+	return 0;
+}
+
+static const struct dev_pm_ops virtio_pci_pm_ops = {
+	SET_SYSTEM_SLEEP_PM_OPS(virtio_pci_freeze, virtio_pci_restore)
+};
+#endif
+
 
 static struct pci_driver virtio_pci_driver = {
 	.name		= "virtio-pci-obsd",

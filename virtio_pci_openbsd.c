@@ -195,7 +195,9 @@ static const struct virtio_config_ops virtio_pci_config_ops = {
 	.finalize_features = vp_finalize_features,
 	.bus_name	= vp_bus_name,
 	.set_vq_affinity = vp_set_vq_affinity,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,13,0)
 	.get_vq_affinity = vp_get_vq_affinity,
+#endif
 };
 
 static int virtio_pci_obsd_match(struct pci_dev *pci_dev)
