@@ -20,6 +20,7 @@
  */
 
 #include <linux/module.h>
+#include <linux/moduleparam.h>
 #include <linux/reboot.h>
 #include <linux/time64.h>
 #include <linux/timekeeping.h>
@@ -28,7 +29,31 @@
 
 #include "virtio_vmmci.h"
 
-u8 debug = 0;
+static int debug = 0;
+
+static int set_debug(const char *val, const struct kernel_param *kp)
+{
+	int n = 0, rc;
+	rc = kstrtoint(val, 10, &n);
+	if (rc || n < 0)
+		return -EINVAL;
+
+	return param_set_int(val, kp);
+}
+
+static int get_debug(char *buffer, const struct kernel_param *kp)
+{
+	int bytes;
+	bytes = snprintf(buffer, 1024, "%d\n", debug);
+	return bytes + 1; // account for NULL
+}
+
+static const struct kernel_param_ops debug_param_ops = {
+	.set	= set_debug,
+	.get	= get_debug,
+};
+
+module_param_cb(debug, &debug_param_ops, &debug, 0664);
 
 #define debug(fmt, ...) \
 	do { if (debug) pr_info("virtio_vmmci: [%s] " fmt, __func__, ##__VA_ARGS__); \
