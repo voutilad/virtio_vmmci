@@ -93,9 +93,17 @@ see the device and the fact it's using our `virti_pci_obsd` driver:
 ```
 
 When you load `virtio_vmmci.ko`, you should see a confirmation the
-module is loaded and, if setting `debug = 1` in `virtio_vmmci.c`
-you'll get some other messages as well in the `dmesg(1)` output:
+module is loaded:
 
+```
+[  256.030878] virtio_vmmci: started VMM Control Interface driver
+```
+
+You can enable debug mode either by passing a `debug=1` argument when
+loading the `virtio_vmmci.ko` module or toggle it afterwards by
+writing either a `0` (off) or `1`/any positive integer (on) to
+`/sys/modules/virtio_vmmci/parameters/debug` as the root user. When
+debug mode is on, you'll get extra dmesg noise like:
 
 ```
 [17769.012388] virtio_vmmci: [vmmci_validate] not implemented
