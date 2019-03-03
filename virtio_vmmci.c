@@ -216,14 +216,15 @@ static void monitor_work_func(struct work_struct *work)
 	diff = timespec64_sub(host, guest);
 
 	// XXX: our globals for tracking drift...since we're not SMP enabled let's
-	// ignore locking/unlocking for now
+	// ignore locking/unlocking for now...also yes, we're blindly going from a
+	// s64 to an int here.
 	drift_sec = diff.tv_sec;
 	drift_nsec = diff.tv_nsec;
 
 	debug("current clock drift: " TIME_FMT " seconds\n", diff.tv_sec, diff.tv_nsec);
 
 	queue_delayed_work(vmmci->monitor_wq, &vmmci->monitor_work, DELAY_20s);
-	debug("clock synchronization routine finished\n");
+	debug("drift measurement routine finished\n");
 }
 
 static int vmmci_probe(struct virtio_device *vdev)
@@ -309,7 +310,7 @@ static void vmmci_changed(struct virtio_device *vdev)
 		break;
 
 	case VMMCI_SYNCRTC:
-		debug("...clock sync requested by host!\n");
+		log("clock sync requested by host\n");
 		schedule_work(&vmmci->sync_work);
 		break;
 

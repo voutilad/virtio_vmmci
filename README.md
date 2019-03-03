@@ -33,11 +33,11 @@ This Linux VMMCI currently comes in **two parts:**
 _You need both modules installed!_
 
 ## Known Issues or Caveats
-Couple things:
+A few things:
 
 1. I test and develop using OpenBSD snapshots, so relatively in sync
-   with -current. The good news is when OpenBSD 6.5 drops, things
-   should be in good working order.
+   with _-current_. (The good news is when OpenBSD 6.5 drops, things
+   should be in good working order.)
 
 2. I lean heavily on the simplification that OpenBSD virtualization
    guests are single CPU currently.
