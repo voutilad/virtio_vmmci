@@ -23,6 +23,7 @@
 #include <linux/moduleparam.h>
 #include <linux/reboot.h>
 #include <linux/rtc.h>
+#include <linux/sysctl.h>
 #include <linux/time64.h>
 #include <linux/timekeeping.h>
 #include <linux/virtio.h>
@@ -60,6 +61,37 @@ static const struct kernel_param_ops debug_param_ops = {
 
 module_param_cb(debug, &debug_param_ops, &debug, 0664);
 
+/* Define our sysctl table entries for exposing our current clock
+ * drift in seconds and nanoseconds. (Avoid using floating point vals
+ * for now.)
+ */
+int drift_sec = 0;
+int drift_nsec = 0;
+
+static struct ctl_table_header *vmmci_table_header;
+
+static struct ctl_table drift_table[] = {
+	{
+		.procname	= "drift_sec",
+		.mode		= 0444,
+		.maxlen		= sizeof(int),
+		.data		= &drift_sec,
+		.proc_handler	= &proc_dointvec,
+	},
+	{
+		.procname	= "drift_nsec",
+		.mode		= 0444,
+		.maxlen		= sizeof(int),
+		.data		= &drift_nsec,
+		.proc_handler	= &proc_dointvec,
+	},
+	{ },
+};
+
+static struct ctl_table vmmci_table = {
+	.procname	= "vmmci",
+	.child		= drift_table,
+};
 
 /* Define our basic commands and structs for our device including the
  * virtio feature tables.
@@ -183,7 +215,12 @@ static void monitor_work_func(struct work_struct *work)
 
 	diff = timespec64_sub(host, guest);
 
-	log("current clock drift: " TIME_FMT " seconds\n", diff.tv_sec, diff.tv_nsec);
+	// XXX: our globals for tracking drift...since we're not SMP enabled let's
+	// ignore locking/unlocking for now
+	drift_sec = diff.tv_sec;
+	drift_nsec = diff.tv_nsec;
+
+	debug("current clock drift: " TIME_FMT " seconds\n", diff.tv_sec, diff.tv_nsec);
 
 	queue_delayed_work(vmmci->monitor_wq, &vmmci->monitor_work, DELAY_20s);
 	debug("clock synchronization routine finished\n");
@@ -221,6 +258,8 @@ static int vmmci_probe(struct virtio_device *vdev)
 
 	INIT_WORK(&vmmci->sync_work, sync_work_func);
 
+	vmmci_table_header = register_sysctl_table(&vmmci_table);
+
 	log("started VMM Control Interface driver\n");
 	return 0;
 }
@@ -240,6 +279,8 @@ static void vmmci_remove(struct virtio_device *vdev)
         debug("reset device\n");
 
 	kfree(vmmci);
+
+	unregister_sysctl_table(vmmci_table_header);
 
 	log("removed device\n");
 }

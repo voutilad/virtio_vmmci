@@ -58,8 +58,8 @@ const int DELAY_1s = HZ / 5;
 #endif
 
 #define debug(fmt, ...) \
-	do { if (debug) pr_info("virtio_vmmci: [%s] " fmt, __func__, ##__VA_ARGS__); \
+	do { if (debug) pr_info("vmmci: [%s] " fmt, __func__, ##__VA_ARGS__); \
 	} while (0)
-#define log(fmt, ...) pr_info("virtio_vmmci: " fmt, ##__VA_ARGS__)
+#define log(fmt, ...) pr_info("vmmci: " fmt, ##__VA_ARGS__)
 
 #endif // _VIRTIO_VMMCI_H

@@ -5,19 +5,24 @@ This is an implementation of [vmmci(4)](https://man.openbsd.org/vmmci) for
 Linux using a customized version of the `virtio_pci` driver from the
 mainline kernel. It currently supports the following:
 
-1. **Clean Shutdowns** when requested by `vmctl(8)`...you can safely use
+1. **Clean Shutdowns on Request**
+   When requested by `vmctl(8)`...you can safely use
    `vmctl stop <you linux guest>` and it'll nicely stop services and
    sync disks!
-2. **System Time Synchronization** when the guest clock drifts from
-   the host, letting you run Linux guests on your OpenBSD laptop,
-   close the lid, and comfortably resume work much later knowing
-   something else will set the time :-)
 
-> Next in the work queue is handling the RTC-setting events so the
-> module can respond to RTC sync events fired via the emulated
-> mc146818 clock.
+2. **System Time Synchronization**
+   When the host `vmd(8)` emulation of the hardware clock detects a
+   clock drift (most likely due to the host being suspended/resumed),
+   it fires a `SYNCRTC` message that the Linux `vmmci` driver responds
+   to by synchronizing system time to the hardware clock time.
 
-The Linux VMMCI comes in two parts:
+3. **Tracking Clock Drift**
+   At regular intervals (currently 20s), `vmmci` will measure current
+   clock drift, recording the current drift amount in seconds and
+   nanoseconds parts readable via `sysctl vmmci`
+
+
+This Linux VMMCI currently comes in **two parts:**
 
 1. `virtio_pci_obsd.ko` -- handles the quirks of getting Linux's
    virtio pci framework to properly work with the VMM Control
@@ -26,6 +31,25 @@ The Linux VMMCI comes in two parts:
    behavior of OpenBSD's `vmmci(4)` driver
 
 _You need both modules installed!_
+
+## Known Issues or Caveats
+Couple things:
+
+1. I test and develop using OpenBSD snapshots, so relatively in sync
+   with -current. The good news is when OpenBSD 6.5 drops, things
+   should be in good working order.
+
+2. I lean heavily on the simplification that OpenBSD virtualization
+   guests are single CPU currently.
+
+3. This won't solve larger clock issues...like not getting your kernel
+   to trust the `tsc` clocksource. (Make sure you boot your system
+   with `clocksource=tsc` and possibly `tsc=reliable`.)
+
+So in general, if you're seeing regular clock drifts over 2-3 seconds
+you need to check your clocksource is tsc in
+`/sys/devices/system/clocksource/clocksource0/current_clocksource`.
+
 
 ## Installation & Usage
 Assuming you've got a recent Linux distro running as a guest already
@@ -59,6 +83,10 @@ $ make
 If that worked and you see _no warnings_, you should have both a
 `virtio_pci_obsd.ko` file and a `virtio_vmmci.ko` file.
 
+> A common source of compiler warnings are from variations in kernel
+> versions. Please share your kernel version and the compiler output
+> if you have issues!
+
 ### 3. Loading the Modules
 You can either use `make insmod` or manually load the modules:
 
@@ -66,6 +94,10 @@ You can either use `make insmod` or manually load the modules:
 $ sudo insmod virtio_pci_obsd.ko
 $ sudo insmod virtio_vmmci.ko
 ```
+
+If you want to install the module permanently and have it auto-load at
+boot, for now you'll have to do that manually. Maybe check out this
+askubuntu post for guidance: https://askubuntu.com/a/307375
 
 ### 4. Checking it's Loaded
 After you load `virtio_pci_obsd.ko` you should see your system match
@@ -118,7 +150,21 @@ debug mode is on, you'll get extra dmesg noise like:
 [17769.034870] virtio_vmmci: [clock_work_func] clock synchronization routine finished
 ```
 
-### 5. Testing that it Works
+Lastly, check the sysctl tables. The driver registers 2 particular
+values that contain the seconds and nanoseconds portion of the last
+measured drift amount:
+
+```
+you@guest:~/virtio_vmmci$ sudo sysctl vmmci
+vmmci.drift_nsec = 199647574
+vmmci.drift_sec = 1
+```
+
+In the above example, the total drift is `1.199647574 seconds`.
+
+> In the future I may expose the last measured time as well
+
+### 5. Testing that Clock Sync Works
 
 #### Testing Clock Sync
 You can easily test the clock synchronization by suspending your
@@ -137,9 +183,9 @@ it's sync'ing the clock:
 If you check `date` or `timedatectl` on the Linux guest you should see
 the system time is very close to our host time.
 
-#### Testing Clean Shutdown
+### 6. Testing Clean Shutdown
 How can we test a clean shutdown? It's not too hard, but it might not
-work the dame between distros and versions. Here's what I've done on
+work the same between distros and versions. Here's what I've done on
 Ubuntu 18.04.
 
 Assuming your vm is up and running:
@@ -154,21 +200,28 @@ Assuming your vm is up and running:
    system...probably `systemd`...start running through the shutdown
    process.
 
+There _may_ be some variations. The Linux vmmci driver calls a kernel
+helper function that handles orchestrating the shutdown via
+userspace. (The question of how to shutdown a Linux system from
+kernelspace is quite fascinating to explore.)
 
 # Seldomly Asked Questions
 Some questions people...mainly myself...have had...
 
 ## _Isn't just using settimeofday(2) dangerous?_
-Maybe? Probably? This isn't a userland `settimeofday(2)` call so it
-might be slightly different. I honestly don't know.
+This isn't using the userland `settimeofday(2)` system call and
+instead using a particular kernel function (`do_settimeofday64` [1])
+that appears to be pretty analagous to OpenBSD's kernel's
+`tc_setclock` function [2] in that it steps the system clock while
+triggering any alarms or timeouts that would fire.
 
-Looking at how VirtualBox handles this with their userland guest
+Also, Looking at how VirtualBox handles this with their userland guest
 additions services, they look for large clock drifts where "large"
 is currently > 30 minutes. If it's large, it just uses
 `settimeofday(2)`. Otherwise, it tries to use something like
 `adjtimex(2)` to accelerate the clock up to the correct time.
 
-See their source for `VBoxServiceTimeSync.cpp` [1].
+See their source for `VBoxServiceTimeSync.cpp` [3].
 
 ## _Can't you just use OpenNTPD or some other NTP daemon?_
 There are two reasons I'd consider using `virtio_vmmci` versus trying
@@ -203,24 +256,10 @@ In short:
    handle a variety of virtio devices...but can't handle a particular
    quirk with how the VMM Control Interface deals with config register i/o.
 
-# Current State & Known Caveats
-As of _26 Feb 2019_, `virtio_vmmci` will:
+# Future Work
+Write a bloody man page...
 
-1. register as a virtio device when loading the module (`virtio_vmmci.ko`)
-2. regularly read the OpenBSD host clock via the virtio config registers...
-  a) compare the guest clock looking for a drift of `5 seconds` or more
-  b) if too much drift, set the guest's system clock via `do_settimeofday64`[2]
-3. listen for shutdown/reboot command requests from the OpenBSD host,
-  acknowledge them, and use the Linux kernel's built-in routines for
-  initiating shutdowns/reboots via userland, allowing `pid 1` to "do
-  the right thing."
-
-Currently, it doesn't _yet_:
-* listen for RTC sync control messages from the OpenBSD host and
-  adjust the mc146818 device.
-
-
-# Acknowledgements
+# Acknowledgements!
 1. Thanks to the OpenBSD `vmm(4)`/`vmd(8)` hackers...especially those that put
    together OpenBSD's `vmmci(4)` driver which acted as my reference point.
 
@@ -235,8 +274,12 @@ Currently, it doesn't _yet_:
 4. The `virtio_balloon.c` driver in the Linux kernel tree is a relatively
    simple virtio example to understand Linux virtio drivers.
 
+5. Folks that have helped test on different distros with different
+   kernel versions :-)
+
 # Footnotes
 (GitHub might not render these...but believe me they're here :-) )
 
-[1] https://www.virtualbox.org/browser/vbox/trunk/src/VBox/Additions/common/VBoxService/VBoxServiceTimeSync.cpp?rev=76553#L683
-[2] https://elixir.bootlin.com/linux/v4.20.12/source/kernel/time/timekeeping.c#L1222
+[1] https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/tree/kernel/time/timekeeping.c?h=v4.20#n1220
+[2] https://github.com/openbsd/src/blob/e12a049bd4bbd1e8315c373a739e08972ed6dd1d/sys/kern/kern_tc.c#L382
+[3] https://www.virtualbox.org/browser/vbox/trunk/src/VBox/Additions/common/VBoxService/VBoxServiceTimeSync.cpp?rev=76553#L683
