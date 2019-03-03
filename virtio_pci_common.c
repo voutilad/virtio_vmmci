@@ -32,7 +32,7 @@ static irqreturn_t vp_config_changed(int irq, void *opaque)
 {
 	struct virtio_pci_device *vp_dev = opaque;
 
-	printk(KERN_INFO "vp_config_changed: %02x\n", irq);
+	// printk(KERN_INFO "vp_config_changed: %02x\n", irq);
 
 	virtio_config_changed(&vp_dev->vdev);
 	return IRQ_HANDLED;
@@ -46,7 +46,7 @@ static irqreturn_t vp_config_changed(int irq, void *opaque)
  * interrupt. */
 static irqreturn_t vp_interrupt(int irq, void *opaque)
 {
-	printk(KERN_INFO "virtio_pci_common: vp_interrupt (%d)\n", irq);
+	// printk(KERN_INFO "virtio_pci_common: vp_interrupt (%d)\n", irq);
 	vp_config_changed(irq, opaque);
 
 	return IRQ_HANDLED;
