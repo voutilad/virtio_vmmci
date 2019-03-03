@@ -73,9 +73,15 @@ enum vmmci_cmd {
 
 struct virtio_vmmci {
 	struct virtio_device *vdev;
-	struct workqueue_struct *clock_wq;
-	struct delayed_work clock_work;
-	struct rtc_device *rtc;
+
+	/* Used for monitoring clock drift. Needs scheduling. */
+	struct workqueue_struct *monitor_wq;
+	struct delayed_work monitor_work;
+
+	/* Used for synchronizing clock. Work is put on from
+	 * the general purpose queue from the interrupt handler.
+	 */
+	struct work_struct sync_work;
 };
 
 static struct virtio_device_id id_table[] = {
@@ -140,8 +146,21 @@ end:
 	return rc;
 }
 
+static void sync_work_func(struct work_struct *work)
+{
+	int rc = 0;
+
+	debug("starting clock synchronization...");
+	rc = sync_system_time();
+	if (rc)
+		debug("clock synchronization failed (%d)\n", rc);
+	else
+		debug("finished clock synchronization!\n");
+
+}
+
 /* Runs our guest/host clock drift measurements and logs them to the syslog */
-static void clock_work_func(struct work_struct *work)
+static void monitor_work_func(struct work_struct *work)
 {
 	struct virtio_vmmci *vmmci;
 	struct timespec64 host, guest, diff;
@@ -150,7 +169,7 @@ static void clock_work_func(struct work_struct *work)
 	debug("measuring clock drift...\n");
 
 	// My god this container_of stuff seems...messy? Oh, Linux...
-	vmmci = container_of((struct delayed_work *) work, struct virtio_vmmci, clock_work);
+	vmmci = container_of((struct delayed_work *) work, struct virtio_vmmci, monitor_work);
 
 	vmmci->vdev->config->get(vmmci->vdev, VMMCI_CONFIG_TIME_SEC, &sec, sizeof(sec));
 	vmmci->vdev->config->get(vmmci->vdev, VMMCI_CONFIG_TIME_USEC, &usec, sizeof(usec));
@@ -166,7 +185,7 @@ static void clock_work_func(struct work_struct *work)
 
 	log("current clock drift: " TIME_FMT " seconds\n", diff.tv_sec, diff.tv_nsec);
 
-	queue_delayed_work(vmmci->clock_wq, &vmmci->clock_work, DELAY_20s);
+	queue_delayed_work(vmmci->monitor_wq, &vmmci->monitor_work, DELAY_20s);
 	debug("clock synchronization routine finished\n");
 }
 
@@ -191,14 +210,16 @@ static int vmmci_probe(struct virtio_device *vdev)
 		debug("...found feature SYNCRTC\n");
 
 	// wire up routine clock drift monitoring
-	vmmci->clock_wq = create_singlethread_workqueue(QNAME);
-	if (vmmci->clock_wq == NULL) {
-		printk(KERN_ERR "vmmci_probe: failed to alloc workqueue\n");
+	vmmci->monitor_wq = create_singlethread_workqueue(QNAME_MONITOR);
+	if (vmmci->monitor_wq == NULL) {
+		printk(KERN_ERR "vmmci_probe: failed to alloc monitoring workqueue\n");
 		return -ENOMEM;
 	}
 
-	INIT_DELAYED_WORK(&vmmci->clock_work, clock_work_func);
-	queue_delayed_work(vmmci->clock_wq, &vmmci->clock_work, DELAY_1s);
+	INIT_DELAYED_WORK(&vmmci->monitor_work, monitor_work_func);
+	queue_delayed_work(vmmci->monitor_wq, &vmmci->monitor_work, DELAY_1s);
+
+	INIT_WORK(&vmmci->sync_work, sync_work_func);
 
 	log("started VMM Control Interface driver\n");
 	return 0;
@@ -209,9 +230,10 @@ static void vmmci_remove(struct virtio_device *vdev)
 	struct virtio_vmmci *vmmci = vdev->priv;
 	debug("removing device\n");
 
-	cancel_delayed_work(&vmmci->clock_work);
-	flush_workqueue(vmmci->clock_wq);
-	destroy_workqueue(vmmci->clock_wq);
+	cancel_delayed_work(&vmmci->monitor_work);
+	flush_workqueue(vmmci->monitor_wq);
+	destroy_workqueue(vmmci->monitor_wq);
+	cancel_work_sync(&vmmci->sync_work);
 	debug("cancelled, flushed, and destroyed work queues\n");
 
 	vdev->config->reset(vdev);
@@ -224,6 +246,7 @@ static void vmmci_remove(struct virtio_device *vdev)
 
 static void vmmci_changed(struct virtio_device *vdev)
 {
+	struct virtio_vmmci *vmmci = vdev->priv;
 	s32 cmd = 0;
 	debug("reading command register...\n");
 
@@ -246,7 +269,7 @@ static void vmmci_changed(struct virtio_device *vdev)
 
 	case VMMCI_SYNCRTC:
 		debug("...clock sync requested by host!\n");
-		sync_system_time();
+		schedule_work(&vmmci->sync_work);
 		break;
 
 	default:

@@ -22,7 +22,8 @@
 #ifndef _VIRTIO_VMMCI_H
 #define _VIRTIO_VMMCI_H
 
-const char *QNAME = "vmmci-wq";
+const char *QNAME_MONITOR = "vmmci-monitor";
+// const char *QNAME_SYNC = "vmmci-sync";
 
 /* These might need tweaking. HZ on Linux is 250 now...so not sure
  * exactly how to get to the right representation of seconds...
