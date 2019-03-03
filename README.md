@@ -30,9 +30,15 @@ _You need both modules installed!_
 ## Installation & Usage
 Assuming you've got a recent Linux distro running as a guest already
 under OpenBSD, it shouldn't be more than a few minutes to get things
-up and running. However, keep in mind my testing has been mostly on
+up and running.
+
+However, keep in mind my testing has been mostly on
 _Ubuntu 18.04_ with it's stock 4.15.0 Linux kernel as well as my own
-[4.20.12](https://github.com/voutilad/linux) customized kernel.
+[4.20.12](https://github.com/voutilad/linux) customized
+kernel. Chances are if the module won't compile on a 4.x kernel, it's
+a simple matter of navigating the moving target that is virtio in the
+4.x Linux kernel versions. Feel free to either submit a PR or just
+open an issue letting me know your kernel version and distro your using.
 
 ### 1. Prerequisites
 Install the tools required to build kernel modules using your package
@@ -156,14 +162,26 @@ is currently > 30 minutes. If it's large, it just uses
 
 See their source for `VBoxServiceTimeSync.cpp` [1].
 
-## _Can't you just use OpenNTPD?_
-Not really for large clock drifts like when you suspend your laptop
-for an evening. I've never seen an NTP daemon that is cool with just
-jumping the system time ahead like that.
+## _Can't you just use OpenNTPD or some other NTP daemon?_
+There are two reasons I'd consider using `virtio_vmmci` versus trying
+to rely on an NTP daemon in the guest:
 
-Yes, `ntpd(8)` supports a `-s` flag to do an actual set of the time
-and not just an adjustment, but even as the man page says it's for
-startup. (Useful for embedded, clock-less systems like a Raspberry Pi.)
+1. **Not every guest has network access.** This precludes NTP as an
+   option. Even if the guest has limited network access, it still
+   needs access to an NTP server, ideally multiple. This isn't always
+   the case.
+
+2. **Large clock drifts like when you suspend your laptop for an
+   evening make most NTP daemons sad.** I've never seen an NTP daemon
+   that is cool with just jumping the system time ahead
+   (i.e. _stepping_) like that. Some require special config to even
+   do. Yes, `ntpd(8)` supports a `-s` flag to do an actual set of the time
+   and not just an adjustment, but even as the man page says it's for
+   startup. (Useful for embedded, clock-less systems like a Raspberry
+   Pi.)
+
+In short: why the headache when, if you trust your host's clock, you
+can just rely on the host?
 
 ## Why all the nasty Virtio PCI glue code?
 Few reasons, but for more background see my email to
