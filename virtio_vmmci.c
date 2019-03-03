@@ -22,6 +22,7 @@
 #include <linux/module.h>
 #include <linux/moduleparam.h>
 #include <linux/reboot.h>
+#include <linux/rtc.h>
 #include <linux/time64.h>
 #include <linux/timekeeping.h>
 #include <linux/virtio.h>
@@ -29,6 +30,10 @@
 
 #include "virtio_vmmci.h"
 
+/* You can either change the global debug level here by changing the
+ * initialization value for "debug" or configure it at runtime via
+ * the kernel module parameter. See README.md for details.
+ */
 static int debug = 0;
 
 static int set_debug(const char *val, const struct kernel_param *kp)
@@ -55,16 +60,10 @@ static const struct kernel_param_ops debug_param_ops = {
 
 module_param_cb(debug, &debug_param_ops, &debug, 0664);
 
-#define debug(fmt, ...) \
-	do { if (debug) pr_info("virtio_vmmci: [%s] " fmt, __func__, ##__VA_ARGS__); \
-	} while (0)
-#define log(fmt, ...) pr_info("virtio_vmmci: " fmt, ##__VA_ARGS__)
 
-static const char *QNAME = "vmmci-wq";
-static const s64 MAX_DRIFT_SEC = 5;
-static const int DELAY_10s = HZ * 5;
-static const int DELAY_1s = HZ / HZ;
-
+/* Define our basic commands and structs for our device including the
+ * virtio feature tables.
+ */
 enum vmmci_cmd {
 	VMMCI_NONE = 0,
 	VMMCI_SHUTDOWN,
@@ -76,6 +75,7 @@ struct virtio_vmmci {
 	struct virtio_device *vdev;
 	struct workqueue_struct *clock_wq;
 	struct delayed_work clock_work;
+	struct rtc_device *rtc;
 };
 
 static struct virtio_device_id id_table[] = {
@@ -87,21 +87,67 @@ static unsigned int features[] = {
 	VMMCI_F_TIMESYNC, VMMCI_F_ACK, VMMCI_F_SYNCRTC,
 };
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,10,0)
-static int vmmci_validate(struct virtio_device *vdev)
-{
-	debug("not implemented");
-	return 0;
-}
-#endif
 
+/* Synchronizes the system time to the hardware clock (rtc). Uses a process
+ * similar to the one performed by the kernel at startup as defined in
+ * the Linux kernel source file /drivers/rtc/hctosys.c. Minus the 32-bit
+ * and non-amd64 specific stuff.
+ */
+static int sync_system_time(void)
+{
+	int rc = -1;
+	struct rtc_time hw_tm;
+	struct timespec64 time = {
+		.tv_nsec = NSEC_PER_SEC >> 1,
+	};
+
+	// Try to open the hardware clock...which should be the emulated
+	// mc146818 clock device.
+	struct rtc_device *rtc = rtc_class_open(CONFIG_RTC_HCTOSYS_DEVICE);
+	if (rtc == NULL) {
+		printk(KERN_ERR "vmmci unable to open rtc device\n");
+		rc = -ENODEV;
+		goto end;
+	}
+
+	// Reading the rtc device should be the same as getting the host
+	// time via the vmmci config registers...just without all the
+	// nastiness
+	rc = rtc_read_time(rtc, &hw_tm);
+	if (rc) {
+		printk(KERN_ERR "vmmci failed to read the hardware clock\n");
+		goto close;
+	}
+	time.tv_sec = rtc_tm_to_time64(&hw_tm);
+
+	// Setting the system clock using do_settimeofday64 should be safe
+	// as it is similar to OpenBSD's tc_setclock that steps the system
+	// clock while triggering any alarms/timeouts that should fire
+	rc = do_settimeofday64(&time);
+	if (rc) {
+		printk(KERN_ERR "vmmci failed to set system clock to rtc!\n");
+		goto close;
+	}
+	log("set system clock to %d-%02d-%02d %02d:%02d:%02d UTC\n",
+	    hw_tm.tm_year + 1900, hw_tm.tm_mon + 1, hw_tm.tm_mday,
+	    hw_tm.tm_hour, hw_tm.tm_min, hw_tm.tm_sec);
+
+close:
+	// I assume this cleans up any references, if the kernel tracks them
+	rtc_class_close(rtc);
+
+end:
+	return rc;
+}
+
+/* Runs our guest/host clock drift measurements and logs them to the syslog */
 static void clock_work_func(struct work_struct *work)
 {
 	struct virtio_vmmci *vmmci;
 	struct timespec64 host, guest, diff;
 	s64 sec, usec; // should these be signed or unsigned?
 
-	debug("starting clock synchronization\n");
+	debug("measuring clock drift...\n");
 
 	// My god this container_of stuff seems...messy? Oh, Linux...
 	vmmci = container_of((struct delayed_work *) work, struct virtio_vmmci, clock_work);
@@ -118,24 +164,9 @@ static void clock_work_func(struct work_struct *work)
 
 	diff = timespec64_sub(host, guest);
 
-	debug("current time delta: " TIME_FMT "\n", diff.tv_sec, diff.tv_nsec);
+	log("current clock drift: " TIME_FMT " seconds\n", diff.tv_sec, diff.tv_nsec);
 
-	if (diff.tv_sec < -MAX_DRIFT_SEC || diff.tv_sec > MAX_DRIFT_SEC) {
-		log("detected drift greater than %lld seconds, synchronizing clock\n",
-		    MAX_DRIFT_SEC);
-		// XXX: while this can be dangerous to throw the clock forward
-		//      or backwards, even VirtualBox will just jump the clock
-		//	if the drift is > 30m. See:
-		//	https://www.virtualbox.org/browser/vbox/trunk/src/VBox/Additions/common/VBoxService/VBoxServiceTimeSync.cpp?rev=76553#L683
-
-		if(do_settimeofday64(&host)) {
-			printk(KERN_ERR "error setting system clock to host!\n");
-			// XXX: not sure how we'd reach here other than `diff`
-			// being malformed
-		}
-	}
-
-	queue_delayed_work(vmmci->clock_wq, &vmmci->clock_work, DELAY_10s);
+	queue_delayed_work(vmmci->clock_wq, &vmmci->clock_work, DELAY_20s);
 	debug("clock synchronization routine finished\n");
 }
 
@@ -159,6 +190,7 @@ static int vmmci_probe(struct virtio_device *vdev)
 	if (virtio_has_feature(vdev, VMMCI_F_SYNCRTC))
 		debug("...found feature SYNCRTC\n");
 
+	// wire up routine clock drift monitoring
 	vmmci->clock_wq = create_singlethread_workqueue(QNAME);
 	if (vmmci->clock_wq == NULL) {
 		printk(KERN_ERR "vmmci_probe: failed to alloc workqueue\n");
@@ -213,7 +245,8 @@ static void vmmci_changed(struct virtio_device *vdev)
 		break;
 
 	case VMMCI_SYNCRTC:
-		debug("...VMCCI_SYNCRTC!\n");
+		debug("...clock sync requested by host!\n");
+		sync_system_time();
 		break;
 
 	default:
@@ -227,6 +260,14 @@ static void vmmci_changed(struct virtio_device *vdev)
 		debug("...acknowledged command %d\n", cmd);
 	}
 }
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,10,0)
+static int vmmci_validate(struct virtio_device *vdev)
+{
+	debug("not implemented");
+	return 0;
+}
+#endif
 
 #ifdef CONFIG_PM_SLEEP
 static int vmmci_freeze(struct virtio_device *vdev)

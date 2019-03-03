@@ -19,6 +19,16 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 #include <linux/version.h>
+#ifndef _VIRTIO_VMMCI_H
+#define _VIRTIO_VMMCI_H
+
+const char *QNAME = "vmmci-wq";
+
+/* These might need tweaking. HZ on Linux is 250 now...so not sure
+ * exactly how to get to the right representation of seconds...
+ */
+const int DELAY_20s = HZ * 4;
+const int DELAY_1s = HZ / 5;
 
 #define VIRTIO_ID_VMMCI			0xffff	/* matches OpenBSD's private id */
 
@@ -45,3 +55,10 @@
 #else
 #define TIME_FMT "%lld.%ld"
 #endif
+
+#define debug(fmt, ...) \
+	do { if (debug) pr_info("virtio_vmmci: [%s] " fmt, __func__, ##__VA_ARGS__); \
+	} while (0)
+#define log(fmt, ...) pr_info("virtio_vmmci: " fmt, ##__VA_ARGS__)
+
+#endif // _VIRTIO_VMMCI_H
