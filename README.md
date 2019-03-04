@@ -32,6 +32,7 @@ This Linux VMMCI currently comes in **two parts:**
 
 _You need both modules installed!_
 
+
 ## Known Issues or Caveats
 A few things:
 
@@ -46,9 +47,18 @@ A few things:
    to trust the `tsc` clocksource. (Make sure you boot your system
    with `clocksource=tsc` and possibly `tsc=reliable`.)
 
-So in general, if you're seeing regular clock drifts over 2-3 seconds
-you need to check your clocksource is tsc in
-`/sys/devices/system/clocksource/clocksource0/current_clocksource`.
+4. I primarily try to support Linux v4.x with intentions of supporting
+   v5.x once distros start to pick it up. If you're on an older distro
+   that uses v3.x or older...you're on your own!
+
+Lastly, if you're seeing regular clock drifts over 2-3 seconds you
+need to check your clocksource is tsc in:
+```
+/sys/devices/system/clocksource/clocksource0/current_clocksource
+```
+Drifts in the 0-2 second range aren't that abnormal from my experience
+and shouldn't cause concern, but a monotonic increase in drift getting
+past that range should make you investigate your guest config!
 
 
 ## Installation & Usage
@@ -64,6 +74,7 @@ a simple matter of navigating the moving target that is virtio in the
 4.x Linux kernel versions. Feel free to either submit a PR or just
 open an issue letting me know your kernel version and distro your using.
 
+
 ### 1. Prerequisites
 Install the tools required to build kernel modules using your package
 manager or whatever you normally use to install stuff. For
@@ -73,8 +84,12 @@ Ubuntu/Debian-like systems, you can try the following:
 $ sudo apt install build-essential libelf-dev linux-headers-$(uname -r)
 ```
 
+Basically you need your kernel headers (you do NOT need a full source
+tree) and some GCC tooling.
+
 ### 2. Compiling
-This should be easy:
+This should be easy and expose issues with your lack of prerequisites
+or an incompatability with your kernel version:
 
 ```sh
 $ make
@@ -215,17 +230,21 @@ that appears to be pretty analagous to OpenBSD's kernel's
 `tc_setclock` function [2] in that it steps the system clock while
 triggering any alarms or timeouts that would fire.
 
-Also, Looking at how VirtualBox handles this with their userland guest
+Looking at how VirtualBox handles this with their userland guest
 additions services, they look for large clock drifts where "large"
 is currently > 30 minutes. If it's large, it just uses
 `settimeofday(2)`. Otherwise, it tries to use something like
-`adjtimex(2)` to accelerate the clock up to the correct time.
+`adjtimex(2)` to accelerate the clock up to the correct time. (This is
+something I may consider for vmmci after some more usage/testing.)
 
 See their source for `VBoxServiceTimeSync.cpp` [3].
 
 ## _Can't you just use OpenNTPD or some other NTP daemon?_
-There are two reasons I'd consider using `virtio_vmmci` versus trying
-to rely on an NTP daemon in the guest:
+Maybe for small clock disturbances/drifts, but it's not ideal for
+major stepping and only solves the clock problem.
+
+There are two reasons I'd consider using `virtio_vmmci` either in
+addition to or in place of relying on an NTP daemon:
 
 1. **Not every guest has network access.** This precludes NTP as an
    option. Even if the guest has limited network access, it still
@@ -241,8 +260,10 @@ to rely on an NTP daemon in the guest:
    startup. (Useful for embedded, clock-less systems like a Raspberry
    Pi.)
 
-In short: why the headache when, if you trust your host's clock, you
-can just rely on the host?
+A lot of modern Linux distros install and enable an NTP daemon by
+default these days. That's fine. But don't forget vmmci gives you
+**clean shutdowns** as well as properly stepping the clock after a
+long suspend/hibernation!
 
 ## Why all the nasty Virtio PCI glue code?
 Few reasons, but for more background see my email to
