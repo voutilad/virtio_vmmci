@@ -28,9 +28,10 @@ Above is a screenshot of the clock sync in practice. Tmux pane `0` is
 my instance of `vmd(8)` running in the foreground with verbose
 logging. The other panes:
 
-1. Alpine 3.8.4 (virt) with kernel 4.14.104-0-virt
-2. Debian Buster (9.8) with kernl 4.9.0-8-amd64
-3. Ubuntu 18.04 with my custom kernel 4.20.13-obsd+
+1. **Alpine 3.8.4** (virt) with kernel 4.14.104-0-virt
+2. **Debian Buster** (9.8) with kernel 4.9.0-8-amd64 (yeah, something
+   is jacked up with dmesg's time...but it IS correct elswhere)
+3. **Ubuntu 18.04** with my custom kernel 4.20.13-obsd+
 
 Take note of the `rtc_fire1` log events from `vmd(8)`. That's where my
 laptop comes out of hibernation and the virtual rtc detects a drift
