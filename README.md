@@ -30,7 +30,8 @@ logging. The other panes:
 
 1. **Alpine 3.8.4** (virt) with kernel 4.14.104-0-virt
 2. **Debian Buster** (9.8) with kernel 4.9.0-8-amd64 (yeah, something
-   is jacked up with dmesg's time...but it IS correct elswhere)
+   is jacked up with dmesg's time...but it IS correct in
+   `journalctl(1)` and when checking `timedatectl(1)`)
 3. **Ubuntu 18.04** with my custom kernel 4.20.13-obsd+
 
 Take note of the `rtc_fire1` log events from `vmd(8)`. That's where my
