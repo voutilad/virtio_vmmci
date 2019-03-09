@@ -21,20 +21,25 @@ mainline kernel. It currently supports the following:
    clock drift, recording the current drift amount in seconds and
    nanoseconds parts readable via `sysctl vmmci`
 
+## Example with Linux Guests
+![vmd(8) and 3 Linux guests](/example.png?raw=true "VMD(8) and 3 Linux Guests")
 
-This Linux VMMCI currently comes in **two parts:**
+Above is a screenshot of the clock sync in practice. Tmux pane `0` is
+my instance of `vmd(8)` running in the foreground with verbose
+logging. The other panes:
 
-1. `virtio_pci_obsd.ko` -- handles the quirks of getting Linux's
-   virtio pci framework to properly work with the VMM Control
-   Interface device from `vmd(8)`
-2. `virtio_vmmci.ko` -- virtio device driver that replicates the
-   behavior of OpenBSD's `vmmci(4)` driver
+1. Alpine 3.8.4 (virt) with kernel 4.14.104-0-virt
+2. Debian Buster (9.8) with kernl 4.9.0-8-amd64
+3. Ubuntu 18.04 with my custom kernel 4.20.13-obsd+
 
-_You need both modules installed!_
+Take note of the `rtc_fire1` log events from `vmd(8)`. That's where my
+laptop comes out of hibernation and the virtual rtc detects a drift
+and sends sync requests to the guests. Each Linux guest receives the
+request, performs the clock step, and ack's.
 
 
 ## Known Issues or Caveats
-A few things:
+Before you dive in, a few things to note:
 
 1. I test and develop using OpenBSD snapshots, so relatively in sync
    with _-current_. (The good news is when OpenBSD 6.5 drops, things
@@ -58,22 +63,25 @@ need to check your clocksource is tsc in:
 ```
 Drifts in the 0-2 second range aren't that abnormal from my experience
 and shouldn't cause concern, but a monotonic increase in drift getting
-past that range should make you investigate your guest config!
+past that range should make you investigate your guest config! (I have
+noticed that at least in Alpine systems, `chronyd(8)` might make
+things _worse_ if it's running and constantly slewing the clock.)
 
 
 ## Installation & Usage
+This Linux VMMCI currently comes in **two parts:**
+
+1. `virtio_pci_obsd.ko` -- handles the quirks of getting Linux's
+   virtio pci framework to properly work with the VMM Control
+   Interface device from `vmd(8)`
+2. `virtio_vmmci.ko` -- virtio device driver that replicates the
+   behavior of OpenBSD's `vmmci(4)` driver
+
+_You will need both modules installed!_
+
 Assuming you've got a recent Linux distro running as a guest already
 under OpenBSD, it shouldn't be more than a few minutes to get things
 up and running.
-
-However, keep in mind my testing has been mostly on
-_Ubuntu 18.04_ with it's stock 4.15.0 Linux kernel as well as my own
-[4.20.12](https://github.com/voutilad/linux) customized
-kernel. Chances are if the module won't compile on a 4.x kernel, it's
-a simple matter of navigating the moving target that is virtio in the
-4.x Linux kernel versions. Feel free to either submit a PR or just
-open an issue letting me know your kernel version and distro your using.
-
 
 ### 1. Prerequisites
 Install the tools required to build kernel modules using your package
@@ -86,6 +94,9 @@ $ sudo apt install build-essential libelf-dev linux-headers-$(uname -r)
 
 Basically you need your kernel headers (you do NOT need a full source
 tree) and some GCC tooling.
+
+On Alpine systems, documentation is a bit sparse, but try to install
+`alpine-sdk` and `linux-virt-dev` (assuming you use the "virt" flavor).
 
 ### 2. Compiling
 This should be easy and expose issues with your lack of prerequisites
