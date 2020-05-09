@@ -205,8 +205,12 @@ static void monitor_work_func(struct work_struct *work)
 
 	vmmci->vdev->config->get(vmmci->vdev, VMMCI_CONFIG_TIME_SEC, &sec, sizeof(sec));
 	vmmci->vdev->config->get(vmmci->vdev, VMMCI_CONFIG_TIME_USEC, &usec, sizeof(usec));
-	getnstimeofday64(&guest);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5,0,0)	
+	getnstimeofday64(&guest);
+#else
+	ktime_get_ts64(&guest);
+#endif
 	debug("host clock: %lld.%lld, guest clock: " TIME_FMT,
 	    sec, usec * NSEC_PER_USEC, guest.tv_sec, guest.tv_nsec);
 

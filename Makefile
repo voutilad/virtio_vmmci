@@ -1,18 +1,26 @@
-obj-m += virtio_vmmci.o virtio_pci_obsd.o
-virtio_pci_obsd-y := virtio_pci_openbsd.o virtio_pci_common.o
+# SPDX-License-Identifier: GPL-2.0
+#
+# Copyright (C) 2020 Dave Voutila <dave@sisu.io>. All rights reserved.
 
-.PHONY: insmod rmmod
+KERNELRELEASE ?= $(shell uname -r)
+KERNELDIR ?= /lib/modules/$(KERNELRELEASE)/build
+DEPMOD ?= depmod
+PWD := $(shell pwd)
 
-all:
-	 make -C /lib/modules/$(shell uname -r)/build M=$(PWD) modules
+all: module
+debug: module-debug
+
+module:
+	@$(MAKE) -C $(KERNELDIR) M=$(PWD) modules
+
+module-debug:
+	@$(MAKE) -C $(KERNELDIR) M=$(PWD) CONFIG_VMMCI_DEBUG=y modules
 
 clean:
-	 make -C /lib/modules/$(shell uname -r)/build M=$(PWD) clean
+	@$(MAKE) -C $(KERNELDIR) M=$(PWD) clean
 
-insmod:	all
-	sudo insmod ./virtio_pci_obsd.ko
-	sudo insmod ./virtio_vmmci.ko
+install:
+	@$(MAKE) -C $(KERNELDIR) M=$(PWD) modules_install
+	@$(DEPMOD) -a $(KERNELRELEASE)
 
-rmmod:
-	sudo rmmod virtio_vmmci.ko
-	sudo rmmod virtio_pci_obsd.ko
+.PHONY: all module-debug module-install install clean
