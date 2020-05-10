@@ -1,4 +1,4 @@
-# A VMM Control Interface (vmmci) for Linux
+# An OpenBSD VMM Control Interface (vmmci) for Linux
 _...or "How I learned to shut my x270 laptop and not worry about my VMs."_
 
 [![builds.sr.ht status](https://builds.sr.ht/~voutilad/virtio_vmmci.svg)](https://builds.sr.ht/~voutilad/virtio_vmmci?)
@@ -53,9 +53,8 @@ Before you dive in, a few things to note:
 2. I lean heavily on the simplification that OpenBSD virtualization
    guests are single CPU currently.
 
-3. This won't solve larger clock issues...like not getting your kernel
-   to trust the `tsc` clocksource. (You can try booting your guest
-   with `clocksource=tsc` and possibly `tsc=reliable`.)
+3. This won't solve larger clock issues...getting your kernel to trust
+   and use the `tsc` clocksource.
 
 4. I primarily focus on supporting the newest long-term support
    kernels picked up by major distros, which means Linux 5.4 at the
@@ -65,17 +64,9 @@ Before you dive in, a few things to note:
    releases since it's simple to install and manage without a lot of
    ancillary stuff. Plus, _I personally like Alpine_.
 
-Lastly, if you're seeing regular clock drifts over 2-3 seconds you
-need to check your clocksource is tsc in:
-```
-/sys/devices/system/clocksource/clocksource0/current_clocksource
-```
-Drifts in the 0-2 second range aren't that abnormal from my experience
-and shouldn't cause concern, but a monotonic increase in drift getting
-past that range should make you investigate your guest config! (I have
-noticed that at least in Alpine systems, `chronyd(8)` might make
-things _worse_ if it's running and constantly slewing the clock.)
-
+> ALSO! With newer 5.4 Linux kernels, tsc will be considered
+> unreliable and refined-jiffies will probably be used. Forcing use of
+> tsc will lead to instability. BE WARNED!
 
 ## Installation & Usage
 This Linux VMMCI currently comes in **two parts:**
