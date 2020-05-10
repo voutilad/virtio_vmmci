@@ -1,0 +1,12 @@
+image: alpine/3.11
+sources:
+  - https://github.com/voutilad/virtio_vmmci
+packages:
+  - gcc
+  - make
+  - linux-virt-dev
+tasks:
+  - setup: |
+      cd virtio_vmmci
+  - build: |
+      make
