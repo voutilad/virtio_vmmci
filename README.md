@@ -1,6 +1,8 @@
 # A VMM Control Interface (vmmci) for Linux
 _...or "How I learned to shut my x270 laptop and not worry about my VMs."_
 
+[![builds.sr.ht status](https://builds.sr.ht/~voutilad/virtio_vmmci.svg)](https://builds.sr.ht/~voutilad/virtio_vmmci?)
+
 This is an implementation of [vmmci(4)](https://man.openbsd.org/vmmci) for
 Linux using a customized version of the `virtio_pci` driver from the
 mainline kernel. It currently supports the following:

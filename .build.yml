@@ -4,9 +4,9 @@ sources:
 packages:
   - gcc
   - make
-  - linux-virt-dev
 tasks:
   - setup: |
-      cd virtio_vmmci
+      sudo apk add linux-$(uname -r | awk -F '-' '{ print $3 }')-dev
   - build: |
+      cd virtio_vmmci
       make
