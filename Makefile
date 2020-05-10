@@ -21,6 +21,6 @@ clean:
 
 install:
 	@$(MAKE) -C $(KERNELDIR) M=$(PWD) modules_install
-	@$(DEPMOD) -a $(KERNELRELEASE)
+	@$(DEPMOD) -A $(KERNELRELEASE)
 
 .PHONY: all module-debug module-install install clean

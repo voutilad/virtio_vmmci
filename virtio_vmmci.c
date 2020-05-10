@@ -374,3 +374,4 @@ module_virtio_driver(virtio_vmmci_driver);
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("OpenBSD VMM Control Interface");
 MODULE_AUTHOR("Dave Voutila <voutilad@gmail.com>");
+MODULE_SOFTDEP("pre: virtio_pci_obsd");

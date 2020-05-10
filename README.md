@@ -135,13 +135,12 @@ This also should be easy now since their properly installed. Simply
 run:
 
 ```sh
-# modprobe virtio_pci_obsd
 # modprobe virtio_vmmci
 ```
 
-> Yes, until I resolve
-> https://github.com/voutilad/virtio_vmmci/issues/9 you'll need to
-> load both separately.
+It should load both the `virtio_vmmci.ko` and `virtio_pci_obsd.ko`
+modules. They'll be visible when running `lsmod(8)`, but you won't see
+a "depends on" entry due to it being a "soft" dependency.
 
 ### 5. Checking it's Loaded
 After you load `virtio_pci_obsd.ko` you should see your system match
@@ -273,8 +272,7 @@ it again (see https://github.com/voutilad/virtio_vmmci/issues/6).
 Some reasons I removed it:
 
 - It's a bandaid on a bigger issue, not a real solution.
-- You can apply a bandaid already using something like `hwclock -s` if
-  so inclined.
+- You can apply a bandaid already using something like `hwclock -us`
 
 Constant, excessive drift shouldn't be the norm. While there's
 precedent for virtualized guests to have clock issues in other
