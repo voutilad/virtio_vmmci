@@ -142,7 +142,8 @@ This also should be easy now since their properly installed. Simply
 run:
 
 ```sh
-# modprobe virtio_vmmci virtio_pci_obsd
+# modprobe virtio_pci_obsd
+# modprobe virtio_vmmci
 ```
 
 > Yes, until I resolve
