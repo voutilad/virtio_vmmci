@@ -236,7 +236,7 @@ static int vmmci_probe(struct virtio_device *vdev)
 	struct virtio_vmmci *vmmci;
 
 	debug("initializing vmmci device\n");
-
+	debug("HZ: %d", HZ);
 	vdev->priv = vmmci = kzalloc(sizeof(*vmmci), GFP_KERNEL);
 	if (!vmmci) {
 		printk(KERN_ERR "vmmci_probe: failed to alloc vmmci struct\n");

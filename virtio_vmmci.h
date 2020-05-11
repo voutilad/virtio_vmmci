@@ -25,11 +25,17 @@
 const char *QNAME_MONITOR = "vmmci-monitor";
 // const char *QNAME_SYNC = "vmmci-sync";
 
-/* These might need tweaking. HZ on Linux is 250 now...so not sure
- * exactly how to get to the right representation of seconds...
- */
-const int DELAY_20s = HZ * 4;
-const int DELAY_1s = HZ / 5;
+/* This should be picked up from the kernel config */
+#ifdef CONFIG_HZ
+#define HZ CONFIG_HZ
+#else
+/* fallback to 100, the default in alpine-virt */
+#define HZ 100
+#endif
+
+/* 1 jiffy = 1 HZ...but that assumes our clock doesn't have issues :-( */
+#define DELAY_1s HZ
+#define DELAY_20s 20 * HZ
 
 #define VIRTIO_ID_VMMCI			0xffff	/* matches OpenBSD's private id */
 
@@ -37,9 +43,9 @@ const int DELAY_1s = HZ / 5;
 #define PCI_DEVICE_ID_OPENBSD_VMMCI	0x0777
 
 /* Configuration registers */
-#define VMMCI_CONFIG_COMMAND	0
-#define VMMCI_CONFIG_TIME_SEC	4
-#define VMMCI_CONFIG_TIME_USEC	12
+#define VMMCI_CONFIG_COMMAND		0
+#define VMMCI_CONFIG_TIME_SEC		4
+#define VMMCI_CONFIG_TIME_USEC		12
 
 /* Features...these get bit-shifted in the Linux virtio code */
 #define VMMCI_F_TIMESYNC		0
