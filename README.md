@@ -43,7 +43,6 @@ laptop comes out of hibernation and the virtual rtc detects a drift
 and sends sync requests to the guests. Each Linux guest receives the
 request, performs the clock step, and ack's.
 
-
 ## Known Issues or Caveats
 Before you dive in, a few things to note:
 
@@ -53,8 +52,7 @@ Before you dive in, a few things to note:
 2. I lean heavily on the simplification that OpenBSD virtualization
    guests are single CPU currently.
 
-3. This won't solve larger clock issues...getting your kernel to trust
-   and use the `tsc` clocksource.
+3. This currenly won't solve larger clock issues, such as major drift.
 
 4. I primarily focus on supporting the newest long-term support
    kernels picked up by major distros, which means Linux 5.4 at the
@@ -272,18 +270,21 @@ it again (see https://github.com/voutilad/virtio_vmmci/issues/6).
 Some reasons I removed it:
 
 - It's a bandaid on a bigger issue, not a real solution.
-- You can apply a bandaid already using something like `hwclock -us`
+- You can apply a bandaid already using something like `hwclock -us`,
+  but since it uses `settimeofday(2)` it may not trigger pending
+  timers properly!
 
 Constant, excessive drift shouldn't be the norm. While there's
 precedent for virtualized guests to have clock issues in other
 hypervisors[2], I'd prefer to learn a bit more about the actual causes
-before I duct tape this one.
+before I duct tape this one. Right now, it looks like the proper thing
+to do is build an implementation of OpenBSD's `pvclock(4)`.
 
 ## _Isn't just using settimeofday(2) dangerous?_
 This isn't using the userland `settimeofday(2)` system call and
-instead using a particular kernel function (`do_settimeofday64` [2])
+instead using a particular kernel function (`do_settimeofday64`[3])
 that appears to be pretty analagous to OpenBSD's kernel's
-`tc_setclock` function [3] in that it steps the system clock while
+`tc_setclock` function[4] in that it steps the system clock while
 triggering any alarms or timeouts that would fire.
 
 Looking at how VirtualBox handles this with their userland guest
@@ -293,7 +294,7 @@ is currently > 30 minutes. If it's large, it just uses
 `adjtimex(2)` to accelerate the clock up to the correct time. (This is
 something I may consider for vmmci after some more usage/testing.)
 
-See their source for `VBoxServiceTimeSync.cpp` [4].
+See their source for `VBoxServiceTimeSync.cpp`[5].
 
 ## _Can't you just use OpenNTPD or some other NTP daemon?_
 Maybe for small clock disturbances/drifts, but it's not ideal for
