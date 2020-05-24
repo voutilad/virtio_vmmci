@@ -25,6 +25,9 @@ mainline kernel. It currently supports the following:
    clock drift, recording the current drift amount in seconds and
    nanoseconds parts readable via `sysctl vmmci`
 
+> **NOTE:** if you're here to deal with constant, excessive clock
+> drift, see the [FAQ](#wait-why-isnt-this-fixing-my-clock-drift-issues)!
+
 ## Example with Linux Guests
 ![vmd(8) and 3 Linux guests](/example.png?raw=true "VMD(8) and 3 Linux Guests")
 
@@ -61,10 +64,6 @@ Before you dive in, a few things to note:
 5. I focus my testing on **Alpine Linux** guests using their `-virt`
    releases since it's simple to install and manage without a lot of
    ancillary stuff. Plus, _I personally like Alpine_.
-
-> ALSO! With newer 5.4 Linux kernels, tsc will be considered
-> unreliable and refined-jiffies will probably be used. Forcing use of
-> tsc will lead to instability. BE WARNED!
 
 ## Installation & Usage
 This Linux VMMCI currently comes in **two parts:**
@@ -211,7 +210,6 @@ This is pretty simple in modern distros that use
 `/etc/modules-load.d/virtio_vmmci.conf` with the contents:
 
 ```
-virtio_pci_obsd
 virtio_vmmci
 ```
 
@@ -274,11 +272,14 @@ Some reasons I removed it:
   but since it uses `settimeofday(2)` it may not trigger pending
   timers properly!
 
-Constant, excessive drift shouldn't be the norm. While there's
-precedent for virtualized guests to have clock issues in other
-hypervisors[2], I'd prefer to learn a bit more about the actual causes
-before I duct tape this one. Right now, it looks like the proper thing
-to do is build an implementation of OpenBSD's `pvclock(4)`.
+Constant, excessive drift shouldn't be the norm.
+
+If you or a loved one experience excessive clock drift in your Linux
+guests under OpenBSD's vmm(4)/vmd(8) hypervisor framework, please
+consider using my fork of vmd(8) and building my custom Linux kernel
+as explained in this `tech@opensd.org` post:
+
+https://marc.info/?l=openbsd-tech&m=159028442625596&w=2
 
 ## _Isn't just using settimeofday(2) dangerous?_
 This isn't using the userland `settimeofday(2)` system call and
