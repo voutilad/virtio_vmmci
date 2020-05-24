@@ -262,8 +262,8 @@ Some questions that people...mainly myself...have had...
 
 ## Wait, why isn't this fixing my clock drift issues?
 My initial release would constantly adjust the guest clock when
-detecting drift. I since removed the functionality, but am considering
-it again (see https://github.com/voutilad/virtio_vmmci/issues/6).
+detecting drift. I since removed the functionality and will not re-add
+it no matter how much it's requested.
 
 Some reasons I removed it:
 
