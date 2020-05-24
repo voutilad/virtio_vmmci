@@ -211,7 +211,7 @@ static void monitor_work_func(struct work_struct *work)
 #else
 	ktime_get_real_ts64(&guest);
 #endif
-	debug("host clock: %lld.%lld, guest clock: " TIME_FMT,
+	debug("host clock: %lld.%09lld, guest clock: " TIME_FMT,
 	    sec, usec * NSEC_PER_USEC, guest.tv_sec, guest.tv_nsec);
 
 	host.tv_sec = sec;

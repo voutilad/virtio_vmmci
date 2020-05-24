@@ -58,9 +58,9 @@ const char *QNAME_MONITOR = "vmmci-monitor";
  * probably a really bad idea to handle it this way?
  */
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4,18,0)
-#define TIME_FMT "%ld.%ld"
+#define TIME_FMT "%ld.%09ld"
 #else
-#define TIME_FMT "%lld.%ld"
+#define TIME_FMT "%lld.%09ld"
 #endif
 
 #define debug(fmt, ...) \
