@@ -272,14 +272,20 @@ Some reasons I removed it:
   but since it uses `settimeofday(2)` it may not trigger pending
   timers properly!
 
-Constant, excessive drift shouldn't be the norm.
+Constant, excessive drift shouldn't be the norm. Using refined-jiffies
+will cause this.
 
 If you or a loved one experience excessive clock drift in your Linux
-guests under OpenBSD's vmm(4)/vmd(8) hypervisor framework, please
-consider using my fork of vmd(8) and building my custom Linux kernel
-as explained in this `tech@opensd.org` post:
+guests under OpenBSD's vmm(4)/vmd(8) hypervisor framework, please try
+the following:
 
-https://marc.info/?l=openbsd-tech&m=159028442625596&w=2
+- Build and install my other Linux kernel:
+  [vmm-clock](https://github.com/voutilad/vmm_clock)
+- Use OpenBSD-current as of 1 July 2020 or so when my vmd(8) patch[6]
+  was merged into the tree
+
+> You will need BOTH...vmm-clock will crash your guest if you don't
+> have a vmd(8) instance with the stability improvements.
 
 ## _Isn't just using settimeofday(2) dangerous?_
 This isn't using the userland `settimeofday(2)` system call and
@@ -386,3 +392,6 @@ https://github.com/openbsd/src/blob/e12a049bd4bbd1e8315c373a739e08972ed6dd1d/sys
 
 [5] VirtualBox's `VBoxServiceTimeSync.cpp`:
 https://www.virtualbox.org/browser/vbox/trunk/src/VBox/Additions/common/VBoxService/VBoxServiceTimeSync.cpp?rev=76553#L683
+
+[6] My vmd(8) stability fixes:
+https://github.com/openbsd/src/commit/08fd0ce3179b426bc00beaee67fffdfa71997830
