@@ -1,4 +1,4 @@
-image: alpine/3.11
+image: alpine/3.12
 sources:
   - https://github.com/voutilad/virtio_vmmci
 packages:
