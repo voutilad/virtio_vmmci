@@ -2,7 +2,7 @@
  *  Implementation of an OpenBSD VMM control interface for Linux guests
  *  running under an OpenBSD host.
  *
- *  Copyright 2019 Dave Voutila
+ *  Copyright 2020 Dave Voutila
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -23,6 +23,7 @@
 #include <linux/moduleparam.h>
 #include <linux/reboot.h>
 #include <linux/rtc.h>
+#include <linux/slab.h>
 #include <linux/sysctl.h>
 #include <linux/time64.h>
 #include <linux/timekeeping.h>
