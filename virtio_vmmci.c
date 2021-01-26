@@ -132,6 +132,7 @@ static unsigned int features[] = {
  * the Linux kernel source file /drivers/rtc/hctosys.c. Minus the 32-bit
  * and non-amd64 specific stuff.
  */
+#ifdef VMMCI_RTC_DEVICE
 static int sync_system_time(void)
 {
 	int rc = -1;
@@ -142,7 +143,7 @@ static int sync_system_time(void)
 
 	// Try to open the hardware clock...which should be the emulated
 	// mc146818 clock device.
-	struct rtc_device *rtc = rtc_class_open(CONFIG_RTC_HCTOSYS_DEVICE);
+	struct rtc_device *rtc = rtc_class_open(VMMCI_RTC_DEVICE);
 	if (rtc == NULL) {
 		printk(KERN_ERR "vmmci unable to open rtc device\n");
 		rc = -ENODEV;
@@ -178,6 +179,13 @@ close:
 end:
 	return rc;
 }
+#else
+static int sync_system_time(void)
+{
+	debug("no known rtc device available");
+	return -1;
+}
+#endif
 
 static void sync_work_func(struct work_struct *work)
 {

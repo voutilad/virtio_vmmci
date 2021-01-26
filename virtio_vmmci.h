@@ -22,8 +22,17 @@
 #ifndef _VIRTIO_VMMCI_H
 #define _VIRTIO_VMMCI_H
 
+/* Find if we have an RTC device or not. We should, but Linux gives us two
+ * possible ways to find it based on how the guest kernel was configured at
+ * build time.
+ */
+#if defined(CONFIG_RTC_HCTOSYS_DEVICE)
+#define VMMCI_RTC_DEVICE	CONFIG_RTC_HCTOSYS_DEVICE
+#elif defined(CONFIG_RTC_SYSTOHC_DEVICE)
+#define VMMCI_RTC_DEVICE	CONFIG_RTC_SYSTOHC_DEVICE
+#endif
+
 const char *QNAME_MONITOR = "vmmci-monitor";
-// const char *QNAME_SYNC = "vmmci-sync";
 
 /* This should be picked up from the kernel config */
 #ifdef CONFIG_HZ
