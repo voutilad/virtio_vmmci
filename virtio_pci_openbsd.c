@@ -54,6 +54,11 @@ static int vp_finalize_features(struct virtio_device *vdev)
 	return 0;
 }
 
+// Apparently older 3.x Linux Kernels don't have this?
+#ifndef VIRTIO_PCI_CONFIG_OFF
+#define VIRTIO_PCI_CONFIG_OFF(x)	((x) ? 24 : 20)
+#endif
+
 /* OpenBSD's vmmci does some funky stuff when reading registers, so the normal
    Linux legacy  vp_get won't work since it reads a byte at a time iterating
    over the registers.

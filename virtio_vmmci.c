@@ -137,7 +137,12 @@ static int sync_system_time(void)
 {
 	int rc = -1;
 	struct rtc_time hw_tm;
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,17,0)
+	struct timespec time = {
+#else
 	struct timespec64 time = {
+#endif
 		.tv_nsec = NSEC_PER_SEC >> 1,
 	};
 
@@ -158,12 +163,17 @@ static int sync_system_time(void)
 		printk(KERN_ERR "vmmci failed to read the hardware clock\n");
 		goto close;
 	}
-	time.tv_sec = rtc_tm_to_time64(&hw_tm);
 
 	// Setting the system clock using do_settimeofday64 should be safe
 	// as it is similar to OpenBSD's tc_setclock that steps the system
 	// clock while triggering any alarms/timeouts that should fire
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,17,0)
+	rtc_tm_to_time(&hw_tm, &time.tv_sec);
+	rc = do_settimeofday(&time);
+#else
+	time.tv_sec = rtc_tm_to_time64(&hw_tm);
 	rc = do_settimeofday64(&time);
+#endif
 	if (rc) {
 		printk(KERN_ERR "vmmci failed to set system clock to rtc!\n");
 		goto close;
