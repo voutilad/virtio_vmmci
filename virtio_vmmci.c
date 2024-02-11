@@ -89,10 +89,17 @@ static struct ctl_table drift_table[] = {
 	{ },
 };
 
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,6,0)
+/*
+ * Removed in:
+ * https://github.com/torvalds/linux/commit/2f2665c13af4895b26761107c2f637c2f112d8e9
+ */
 static struct ctl_table vmmci_table = {
 	.procname	= "vmmci",
 	.child		= drift_table,
 };
+#endif
 
 /* Define our basic commands and structs for our device including the
  * virtio feature tables.
@@ -282,8 +289,11 @@ static int vmmci_probe(struct virtio_device *vdev)
 
 	INIT_WORK(&vmmci->sync_work, sync_work_func);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6,6,0)
 	vmmci_table_header = register_sysctl_table(&vmmci_table);
-
+#else
+	vmmci_table_header = register_sysctl_sz("vmmci", drift_table, 2);
+#endif
 	log("started VMM Control Interface driver\n");
 	return 0;
 }
