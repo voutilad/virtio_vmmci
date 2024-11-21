@@ -73,16 +73,15 @@ int vp_find_vqs(struct virtio_device *, unsigned nvqs,
 	return 0;
 }
 #else
-/* the config->find_vqs() implementation */
-int vp_find_vqs(struct virtio_device *vdev, unsigned nvqs,
+int vp_find_vqs(struct virtio_device *vdev, unsigned int nvqs,
 		struct virtqueue *vqs[], vq_callback_t *callbacks[],
 		const char * const names[], const bool *ctx,
 		struct irq_affinity *desc)
 {
-	// XXX: we don't use queues!
 	return 0;
 }
 #endif
+
 const char *vp_bus_name(struct virtio_device *vdev)
 {
 	struct virtio_pci_device *vp_dev = to_vp_device(vdev);
