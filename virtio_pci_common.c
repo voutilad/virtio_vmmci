@@ -72,11 +72,19 @@ int vp_find_vqs(struct virtio_device *, unsigned nvqs,
 {
 	return 0;
 }
-#else
+#elif LINUX_VERSION_CODE < KERNEL_VERSION(6,11,0)
 int vp_find_vqs(struct virtio_device *vdev, unsigned int nvqs,
 		struct virtqueue *vqs[], vq_callback_t *callbacks[],
 		const char * const names[], const bool *ctx,
 		struct irq_affinity *desc)
+{
+	return 0;
+}
+#else /* 6.11 changed the API...grrrrr. */
+int vp_find_vqs(struct virtio_device *vdev, unsigned int nvqs,
+    struct virtqueue *vqs[],
+    struct virtqueue_info vqs_info[],
+    struct irq_affinity *desc)
 {
 	return 0;
 }
