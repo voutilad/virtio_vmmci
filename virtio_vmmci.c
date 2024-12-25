@@ -32,6 +32,16 @@
 
 #include "virtio_vmmci.h"
 
+static int vmmci_reboot_notify(struct notifier_block *, unsigned long, void *);
+
+static struct notifier_block notifier = {
+	.notifier_call = vmmci_reboot_notify,
+};
+
+/* XXX for now, use a global. Needed by notifier callback. :'( */
+static struct virtio_vmmci *_vmmci = NULL;
+
+
 /* You can either change the global debug level here by changing the
  * initialization value for "debug" or configure it at runtime via
  * the kernel module parameter. See README.md for details.
@@ -294,6 +304,11 @@ static int vmmci_probe(struct virtio_device *vdev)
 #else
 	vmmci_table_header = register_sysctl_sz("vmmci", drift_table, 2);
 #endif
+
+	/* Wire in a reboot notifier. */
+	_vmmci = vmmci;
+	register_reboot_notifier(&notifier);
+
 	log("started VMM Control Interface driver\n");
 	return 0;
 }
@@ -302,6 +317,8 @@ static void vmmci_remove(struct virtio_device *vdev)
 {
 	struct virtio_vmmci *vmmci = vdev->priv;
 	debug("removing device\n");
+
+	unregister_reboot_notifier(&notifier);
 
 	cancel_delayed_work(&vmmci->monitor_work);
 	flush_workqueue(vmmci->monitor_wq);
@@ -357,6 +374,24 @@ static void vmmci_changed(struct virtio_device *vdev)
 		vdev->config->set(vdev, VMMCI_CONFIG_COMMAND, &cmd, sizeof(cmd));
 		debug("...acknowledged command %d\n", cmd);
 	}
+}
+
+static int vmmci_reboot_notify(struct notifier_block *nb, unsigned long code,
+    void *unused)
+{
+	struct virtio_device *vdev = _vmmci->vdev;
+
+	u32 cmd;
+
+	if (code == SYS_RESTART)
+		cmd = VMMCI_REBOOT;
+	else
+		cmd = VMMCI_SHUTDOWN;
+
+	vdev->config->set(vdev, VMMCI_CONFIG_COMMAND, &cmd,
+	    sizeof(cmd));
+
+	return NOTIFY_DONE;
 }
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,10,0)
